@@ -121,12 +121,23 @@ export function PlayModes({
     try {
       const person = await ensureGuestSession()
       if (person.id !== user?.id) onUser(person)
+      const requested = selected.length < categories.length ? selected : []
       const s = await play<Session>('start', {
         mode,
-        ...(selected.length > 0 && selected.length < categories.length
-          ? { categories: selected }
+        ...(requested.length
+          ? { categories: requested, ...(requested.length === 1 ? { category: requested[0] } : {}) }
           : {}),
       })
+      if (requested.length) {
+        const saved = s.categories ?? (s.category ? [s.category] : [])
+        if (
+          saved.length !== requested.length ||
+          !requested.every((kind) => saved.includes(kind)) ||
+          s.eligible.some((kind) => !requested.includes(kind))
+        ) {
+          throw new Error('The game server could not save your category selection. This site needs a database update for custom games.')
+        }
+      }
       navigate('/play/session/' + s.id)
     } catch (e) {
       setError(message(e))

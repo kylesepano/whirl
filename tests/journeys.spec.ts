@@ -161,6 +161,25 @@ test('category cards support selecting five categories and resetting to all', as
   expect(five.map((kind) => kind.toUpperCase())).toContain(await spin(page))
 })
 
+test('custom category selection cannot silently start a mixed session', async ({ page }) => {
+  await page.route('**/api/play/start', (route) => {
+    const { categories } = route.request().postDataJSON()
+    expect(categories).toEqual(['who', 'where'])
+    return route.fulfill({
+      json: {
+        id: '3182da6f-cd9d-43de-a983-6ae1b069e6ae',
+        eligible: ['who', 'where', 'when', 'what', 'why', 'how'],
+      },
+    })
+  })
+  await page.goto('/')
+  await selectCategories(page, ['who', 'where'])
+  await page.getByRole('button', { name: 'Start Quick Play' }).click()
+  await expect(page.getByText('The game server could not save your category selection.', { exact: false })).toBeVisible()
+  await expect(page).toHaveURL(/\/$/)
+  await expect(page.locator('.category-card[aria-pressed="true"]')).toHaveCount(2)
+})
+
 test('admin signs in, adds, edits, publishes and deletes a question', async ({
   page,
   request,
