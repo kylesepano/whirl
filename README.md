@@ -14,7 +14,7 @@ npm.cmd ci
 npm.cmd run dev
 ```
 
-Visit **http://127.0.0.1:5173/** and choose a game mode. Guests can play without an account form. A game's answers and score are available on its results page.
+Visit **http://127.0.0.1:5173/** and choose a game mode. Keep **All categories** for a mixed game, or choose a single category such as **WHERE only**. Guests can play without an account form. A game's answers and score are available on its results page.
 
 The development server binds to loopback and stores its PostgreSQL database under the ignored `.whirl/` directory. WHERE rounds use MapLibre and bundled Natural Earth data. Country questions highlight the full country and provide a country list. Location questions accept a map pin or coordinates. The maps need no tile service or API key.
 
@@ -55,7 +55,7 @@ Keep the local admin password and database connection strings server-side. The l
 - [Question sourcing, asset rights, and importer](docs/content.md)
 - [Implementation status and remaining work](PROGRESS.md)
 
-The bundled bank contains **10,802 published questions** across General knowledge, History, Science, Movie & TV series, Literature, Sports, Geography, Music, Pop culture, and other subjects. Admins can search the Question Bank by question, subject, or topic and filter by publication status.
+The bundled bank contains **10,810 published questions** across General knowledge, History, Science, Movie & TV series, Literature, Sports, Geography, Music, Pop culture, and other subjects. WHO rounds use four selectable portraits. WHAT rounds use four selectable answers with optional image reveals. Admins can search the Question Bank by question, subject, or topic and filter by publication status.
 
 New bundled questions load on local server startup or when the latest migrations are applied to hosted Supabase. The separate Wikidata importer stores dated claims as review candidates.
 

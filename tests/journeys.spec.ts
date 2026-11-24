@@ -5,8 +5,9 @@ const adminPassword = 'playwright-local-admin'
 const submitAnswer = (page: Page) =>
   page.getByRole('button', { name: 'Submit answer' })
 
-async function start(page: Page, mode: string) {
+async function start(page: Page, mode: string, category?: string) {
   await page.goto('/')
+  if (category) await page.getByLabel('Question category').selectOption(category)
   await page.getByRole('button', { name: 'Start ' + mode }).click()
   await expect(page).toHaveURL(/\/play\/session\//)
 }
@@ -18,12 +19,7 @@ async function spin(page: Page) {
 
 async function answer(page: Page, kind: string) {
   if (kind === 'WHO' || kind === 'WHAT') {
-    const choice = page.locator('.options .option').first()
-    if (await choice.count()) await choice.click()
-    else
-      await page
-        .getByLabel('Your answer', { exact: true })
-        .fill('Example guess')
+    await page.locator('.options .option').first().click()
   }
   if (kind === 'WHERE') {
     if (await page.getByText('Select a country on the map or from the list below.').count()) {
@@ -122,6 +118,18 @@ test('guest completes Quick Play and sees session results after a reload', async
   ).toBeVisible()
 })
 
+test('a guest can play only WHO and keep the category after a reload', async ({ page }) => {
+  await start(page, 'Quick Play', 'who')
+  await expect(page.getByText('WHO only', { exact: true })).toBeVisible()
+  expect(await spin(page)).toBe('WHO')
+  await answer(page, 'WHO')
+  await page.reload()
+  await expect(page.getByText('WHO only', { exact: true })).toBeVisible()
+  await expect(page.locator('.feedback')).toBeVisible()
+  await page.getByRole('button', { name: 'Next round' }).click()
+  expect(await spin(page)).toBe('WHO')
+})
+
 test('admin signs in, adds, edits, publishes and deletes a question', async ({
   page,
   request,
@@ -210,6 +218,37 @@ test('mobile opens directly to Play without public admin or player tracking link
   await page.goto('/question-bank')
   await expect(page).toHaveURL(/\/login$/)
   await expect(page.getByRole('heading', { name: 'Admin sign in' })).toBeVisible()
+})
+
+test('WHO displays selectable photographs and WHAT uses four text choices', async ({ page }) => {
+  await page.goto('/login')
+  await page.getByLabel('Email', { exact: true }).fill(adminEmail)
+  await page.getByLabel('Password', { exact: true }).fill(adminPassword)
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+  const search = page.getByLabel('Search questions')
+  await search.fill('first American woman in space on STS-7')
+  await page.getByRole('button', { name: /first American woman in space on STS-7/ }).click()
+  await page.getByRole('button', { name: 'Play preview' }).click()
+  const portraits = page.locator('.options.portraits button')
+  await expect(portraits).toHaveCount(4)
+  await expect.poll(() => portraits.locator('img').evaluateAll((images) =>
+    images.filter((img) => (img as HTMLImageElement).naturalWidth > 0).length,
+  )).toBe(4)
+  await expect(page.locator('.options.portraits')).not.toContainText(/Sally Ride|Mae Jemison|Kathryn Sullivan|Eileen Collins/)
+  await portraits.filter({ has: page.locator('img[src="/media/5a9b7a2729.jpg"]') }).click()
+  await page.getByRole('button', { name: 'Score preview' }).click()
+  await expect(page.locator('.feedback')).toContainText('Sally Ride · 1000 pts')
+
+  await search.fill('symbol H?')
+  await page.getByRole('button', { name: /Which chemical element uses the symbol H\?/ }).click()
+  await page.getByRole('button', { name: 'Play preview' }).click()
+  const choices = page.locator('.options button')
+  await expect(choices).toHaveCount(4)
+  await expect(choices.locator('img')).toHaveCount(0)
+  await expect(page.getByRole('textbox', { name: 'Your answer' })).toHaveCount(0)
+  await choices.filter({ hasText: 'Hydrogen' }).click()
+  await page.getByRole('button', { name: 'Score preview' }).click()
+  await expect(page.locator('.feedback')).toContainText('Hydrogen · 1000 pts')
 })
 
 test('WHERE loads the bundled world map and accepts a pin and coordinates', async ({

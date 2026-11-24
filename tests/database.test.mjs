@@ -132,6 +132,19 @@ describe('authorization and publication', () => {
     )
     expect(rows.filter((q) => q.warnings.length)).toEqual([])
   })
+  it('publishes portrait-only WHO rounds and selectable WHAT rounds', async () => {
+    const { rows } = await db.query(`
+      select kind,presentation,solution from public.questions
+      where status='published' and kind in ('who','what')
+    `)
+    expect(rows.filter((q) => q.kind === 'who').length).toBeGreaterThanOrEqual(3)
+    for (const { kind, presentation, solution } of rows) {
+      expect(presentation.options).toHaveLength(4)
+      expect(solution).not.toHaveProperty('aliases')
+      expect(presentation.options.some((option) => option.id === solution.correct)).toBe(true)
+      if (kind === 'who') expect(presentation.options.every(({ image }) => Boolean(image))).toBe(true)
+    }
+  })
   it('publishes at least 10,000 distinct questions across the requested subjects', async () => {
     const { rows } = await db.query(`
       select t.subject, count(*)::int as count
@@ -319,6 +332,30 @@ describe('server scoring', () => {
   })
 })
 describe('game session', () => {
+  it('keeps focused play in the selected category across rounds and reloads', async () => {
+    await expect(game('start', { mode: 'quick', category: 'sports' }))
+      .rejects.toThrow('Choose a valid question category')
+    for (const category of ['who', 'where']) {
+      const session = await game('start', { mode: 'quick', category })
+      expect(session).toMatchObject({ category, eligible: [category], target: 5 })
+      const seen = new Set()
+      for (let i = 0; i < 5; i++) {
+        const round = await game('spin', { id: session.id })
+        expect(round.kind).toBe(category)
+        const answer = category === 'who'
+          ? round.display.options[0].id
+          : round.display.mechanic === 'country' ? { country: 'CHN' } : { lat: 0, lng: 0 }
+        const result = await game('submit', { id: session.id, round: round.id, answer })
+        seen.add(result.questionId)
+      }
+      expect(seen.size).toBe(5)
+      const reloaded = await game('session', { id: session.id })
+      expect(reloaded).toMatchObject({ category, eligible: [category] })
+      expect(reloaded.finished_at).toBeTruthy()
+      expect(reloaded.rounds.map(({ kind }) => kind)).toEqual(Array(5).fill(category))
+    }
+  })
+
   it('keeps the seeded country private until submitting a guess', async () => {
     const session = await game('start', { mode: 'practice' })
     const { rows: [round] } = await db.query(
@@ -374,7 +411,7 @@ describe('game session', () => {
       const key = privateRound.snapshot.solution
       seen.add(privateRound.question_id)
       const textClue = r.display.mechanic === 'text'
-      const revealable = r.kind === 'what' && !textClue
+      const revealable = r.kind === 'what' && !textClue && r.display.mechanic !== 'choice'
       const answer = textClue
         ? key.aliases[0]
         : r.display.mechanic === 'country'

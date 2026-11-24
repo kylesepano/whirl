@@ -8,7 +8,7 @@ export type Display = {
   options?: Option[]
   image?: string
   images?: string[]
-  mechanic?: 'matching' | 'evidence' | 'chain' | 'text' | 'country'
+  mechanic?: 'matching' | 'evidence' | 'chain' | 'text' | 'choice' | 'country'
   pairs?: Option[]
   matches?: Option[]
   min?: number
@@ -66,6 +66,7 @@ export type Session = {
   mode: string
   total: number
   target: number | null
+  category?: Kind | null
   rounds: Round[]
   eligible: Kind[]
   finished_at: string | null

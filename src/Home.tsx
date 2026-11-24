@@ -2,8 +2,16 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { Flame, Infinity as InfinityIcon, Orbit, Timer, Zap } from 'lucide-react'
-import { authenticateAdmin, ensureGuestSession, message, play, type Session, type User } from './api'
-import { ErrorBox, PageTitle } from './components/shared'
+import {
+  authenticateAdmin,
+  ensureGuestSession,
+  message,
+  play,
+  type Kind,
+  type Session,
+  type User,
+} from './api'
+import { categories, ErrorBox, PageTitle } from './components/shared'
 import { Button } from './components/ui/button'
 const modes = [
   {
@@ -105,6 +113,7 @@ export function PlayModes({
 }) {
   const [starting, setStarting] = useState(''),
     [error, setError] = useState('')
+  const [category, setCategory] = useState<Kind | ''>('')
   const navigate = useNavigate()
   async function start(mode: string) {
     setStarting(mode)
@@ -112,7 +121,7 @@ export function PlayModes({
     try {
       const person = await ensureGuestSession()
       if (person.id !== user?.id) onUser(person)
-      const s = await play<Session>('start', { mode })
+      const s = await play<Session>('start', { mode, category: category || null })
       navigate('/play/session/' + s.id)
     } catch (e) {
       setError(message(e))
@@ -123,9 +132,24 @@ export function PlayModes({
     <>
       <PageTitle
         title="Play WHIRL"
-        text="Spin the wheel to discover which skill you’ll use next."
+        text="Choose a category and a game mode, then spin the wheel."
       />
       {error && <ErrorBox error={error} />}
+      <label className="play-category">
+        Question category
+        <select
+          value={category}
+          onChange={(event) => setCategory(event.target.value as Kind | '')}
+          disabled={Boolean(starting)}
+        >
+          <option value="">All categories</option>
+          {categories.map(({ kind, label, name }) => (
+            <option key={kind} value={kind}>
+              {label} only · {name}
+            </option>
+          ))}
+        </select>
+      </label>
       <div className="mode-grid">
         {modes.map(({ id, label, detail, description, icon: Icon, color }) => (
           <div className="mode-card panel" key={id}>

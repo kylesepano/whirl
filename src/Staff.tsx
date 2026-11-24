@@ -268,17 +268,15 @@ function QuestionEditor({
   record?: EditorRecord
   onSaved: (id: string | null) => void
 }) {
-  const [kind, setKind] = useState<Kind>(record?.kind ?? 'when')
+  const legacyWho = record?.kind === 'who' && record.presentation.mechanic === 'text'
+  const [kind, setKind] = useState<Kind>(legacyWho ? 'what' : (record?.kind ?? 'when'))
   const [mechanic, setMechanic] = useState(
     record?.kind === 'why'
       ? (record.presentation.mechanic ?? 'evidence')
       : 'evidence',
   )
-  const [typed, setTyped] = useState(Boolean(record?.solution.aliases))
-  const [textOnly, setTextOnly] = useState(
-    record?.presentation.mechanic === 'text',
-  )
-  const textClue = textOnly && (kind === 'who' || kind === 'what')
+  const [showImageClue, setShowImageClue] = useState(Boolean(record?.presentation.images?.length))
+  const imageClue = kind === 'what' && showImageClue
   const [whereMode, setWhereMode] = useState(
     record?.presentation.mechanic === 'country' ? 'country' : 'pin',
   )
@@ -300,7 +298,7 @@ function QuestionEditor({
   >(null)
   const [dirty, setDirty] = useState(false)
   const client = useQueryClient()
-  const existing = record?.kind === kind ? record : undefined
+  const existing = record?.kind === kind || (legacyWho && kind === 'what') ? record : undefined
   const existingOptions = existing?.presentation.options ?? []
   const [busy, setBusy] = useState(false)
   useEffect(() => {
@@ -355,9 +353,6 @@ function QuestionEditor({
         scale: num('scale'),
         ...(str('polygon') ? { polygon: JSON.parse(str('polygon')) } : {}),
       })
-    } else if (textClue) {
-      display.mechanic = 'text'
-      solution.aliases = lines('aliases')
     } else if (kind === 'who') {
       display.options = lines('options').map((image, i) => ({
         image,
@@ -372,13 +367,12 @@ function QuestionEditor({
         }),
       )
     } else if (kind === 'what') {
-      display.images = lines('images')
-      solution.credits = credits()
-      if (typed) solution.aliases = lines('aliases')
-      else {
-        display.options = options('options')
-        solution.correct = 'opt-' + num('correct')
-      }
+      if (imageClue) {
+        display.images = lines('images')
+        solution.credits = credits()
+      } else display.mechanic = 'choice'
+      display.options = options('options')
+      solution.correct = 'opt-' + num('correct')
     } else if (kind === 'why' && mechanic === 'matching') {
       display.pairs = options('pairs')
       display.matches = options('matches')
@@ -543,13 +537,12 @@ function QuestionEditor({
     </label>
   )
   const oldOrder = existing?.solution.correct as string[] | undefined
-  const cardLabels = (
-    kind === 'how' && Array.isArray(oldOrder)
-      ? oldOrder.map((id) => existingOptions.find((o) => o.id === id))
-      : existingOptions
-  )
-    .map((o) => (kind === 'who' ? o?.image : o?.label))
-    .join('\n')
+  const cardLabels = !existingOptions.length && existing?.solution.aliases
+    ? String(existing.solution.label ?? '')
+    : (kind === 'how' && Array.isArray(oldOrder)
+        ? oldOrder.map((id) => existingOptions.find((o) => o.id === id))
+        : existingOptions
+      ).map((o) => (kind === 'who' ? o?.image : o?.label)).join('\n')
   const indices = (value: unknown) =>
     (Array.isArray(value) ? value : [value])
       .map((v) => existingOptions.findIndex((o) => o.id === v) + 1)
@@ -599,7 +592,7 @@ function QuestionEditor({
         </div>
         {area('prompt', 'Question prompt', record?.prompt, true)}
         <div className="stack" key={kind}>
-          {(kind === 'who' || kind === 'what') && !textClue && (
+          {(kind === 'who' || imageClue) && (
             <details>
               <summary>Upload question media</summary>
               <Media />
@@ -773,49 +766,17 @@ function QuestionEditor({
               </select>
             </label>
           )}
-          {(kind === 'who' || kind === 'what') && (
+          {kind === 'what' && (
             <label className="check-row">
-              <input
-                type="checkbox"
-                checked={textOnly}
-                onChange={(e) => setTextOnly(e.target.checked)}
-              />
-              Text clue
+              <input type="checkbox" checked={showImageClue} onChange={(e) => setShowImageClue(e.target.checked)} />
+              Include an image reveal
             </label>
           )}
-          {textClue &&
-            area(
-              'aliases',
-              'Accepted answers (one per line)',
-              (existing?.solution.aliases as string[] | undefined)?.join('\n'),
-              true,
-            )}
-          {kind === 'what' && !textClue && (
-            <>
-              <label className="check-row">
-                <input
-                  type="checkbox"
-                  checked={typed}
-                  onChange={(e) => setTyped(e.target.checked)}
-                />{' '}
-                Accept typed aliases
-              </label>
-              {area(
-                'images',
-                'Image stage URLs, least to most revealed (one per line)',
-                existing?.presentation.images?.join('\n'),
-                true,
-              )}
-              {typed &&
-                area(
-                  'aliases',
-                  'Accepted aliases (one per line)',
-                  (existing?.solution.aliases as string[] | undefined)?.join(
-                    '\n',
-                  ),
-                  true,
-                )}
-            </>
+          {imageClue && area(
+            'images',
+            'Image stage URLs, least to most revealed (one per line)',
+            existing?.presentation.images?.join('\n'),
+            true,
           )}
           {kind === 'why' && mechanic === 'matching' ? (
             <div className="stack" key="matching">
@@ -851,11 +812,7 @@ function QuestionEditor({
               )}
             </div>
           ) : (
-            !textClue &&
-            (kind === 'who' ||
-              kind === 'how' ||
-              kind === 'why' ||
-              (kind === 'what' && !typed)) && (
+            ['who', 'how', 'why', 'what'].includes(kind) && (
               <div className="stack" key="cards">
                 {area(
                   'options',
@@ -874,7 +831,7 @@ function QuestionEditor({
                       ? 'Correct card positions (comma separated)'
                       : 'Correct card position (1–4)',
                     indices(existing?.solution.correct) === '0'
-                      ? ''
+                      ? (existing?.solution.aliases ? '1' : '')
                       : indices(existing?.solution.correct),
                     'text',
                     true,
@@ -882,7 +839,7 @@ function QuestionEditor({
               </div>
             )
           )}
-          {!textClue && (kind === 'who' || kind === 'what') && (
+          {(kind === 'who' || imageClue) && (
             <>
               {area(
                 'credits',

@@ -40,6 +40,8 @@ To build from source snapshots, run `python scripts/catalog-expansion.py --fetch
 
 Follow [NASA's media guidelines](https://www.nasa.gov/nasa-brand-center/images-and-media/). WHIRL makes no claim of NASA affiliation or endorsement. Other images need individual rights checks. Add the creator, license, source URL, and, for portraits, subject and medium. Use opaque filenames and check photos for visible names or answer text.
 
+Migration `202611240008_multiple_choice.sql` adds eight NASA portrait rounds and converts the bundled typed-answer catalog to four-card WHAT questions. Distractors come from the same catalog family or are authored for a specific question. Custom typed clues without three suitable distractors move to Pending review for an admin to add choices. Each portrait's original NASA record is credited in the round feedback.
+
 WHERE questions offer two map answer types in the admin editor. Map pin accepts coordinates and scores by distance. Select a country highlights the whole country and scores an exact match. Choose the correct country from the list. Players can use the map or the same list.
 
 MapLibre GL JS uses bundled Natural Earth data. Pin mode uses the 1:110m basemap and country mode uses more detailed 1:50m country boundaries. Natural Earth shows de facto boundaries. The maps need no tile service or key. Run `node scripts/map-data.mjs` to regenerate the map data and country list from the pinned release. [Natural Earth country boundaries](https://www.naturalearthdata.com/downloads/50m-cultural-vectors/50m-admin-0-countries-2/) · [Terms of use](https://www.naturalearthdata.com/about/terms-of-use/)

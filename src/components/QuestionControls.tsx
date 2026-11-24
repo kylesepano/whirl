@@ -318,17 +318,15 @@ export function QuestionControls({
   const { display, kind } = round
   const locked = Boolean(feedback)
   const options = display.options ?? []
+  const portraits = kind === 'who' && display.mechanic !== 'text'
+  const imageClue = kind === 'what' && display.mechanic !== 'choice' && display.mechanic !== 'text'
   if (display.mechanic === 'text')
     return (
-      <label>
-        Your answer
-        <input
-          value={typeof answer === 'string' ? answer : ''}
-          onChange={(e) => onChange(e.target.value)}
-          maxLength={200}
-          disabled={locked}
-        />
-      </label>
+      <p className="muted">
+        {locked && typeof answer === 'string'
+          ? 'Your answer was ' + answer
+          : 'This question is unavailable. Start a new game to continue.'}
+      </p>
     )
   if (kind === 'where' && display.mechanic === 'country')
     return (
@@ -442,7 +440,7 @@ export function QuestionControls({
     )
   return (
     <>
-      {kind === 'what' && (
+      {imageClue && (
         <>
           <div className="mystery-image">
             {display.image ? (
@@ -480,17 +478,8 @@ export function QuestionControls({
           )}
         </>
       )}
-      {kind === 'what' && options.length === 0 ? (
-        <label>
-          Your answer
-          <input
-            value={typeof answer === 'string' ? answer : ''}
-            onChange={(e) => onChange(e.target.value)}
-            disabled={locked}
-          />
-        </label>
-      ) : (
-        <div className={'options ' + (kind === 'who' ? 'portraits' : '')}>
+      {options.length > 0 && (
+        <div className={'options ' + (portraits ? 'portraits' : '')}>
           {options.map((o, i) => {
             const selected = answer === o.id
             const right = feedback?.solution.correct === o.id
@@ -507,19 +496,26 @@ export function QuestionControls({
                 }
                 onClick={() => onChange(o.id)}
               >
-                {kind === 'who' && (
-                  <img
-                    src={o.image}
-                    alt=""
-                    draggable={false}
-                    onError={(e) => {
-                      e.currentTarget.style.visibility = 'hidden'
-                    }}
-                  />
+                {portraits && (
+                  <div className="portrait-image">
+                    <img
+                      src={o.image}
+                      alt=""
+                      draggable={false}
+                      onLoad={({ currentTarget: img }) => {
+                        img.hidden = false
+                        img.classList.toggle('portrait-tall', img.naturalHeight > img.naturalWidth * 1.18)
+                      }}
+                      onError={({ currentTarget: img }) => {
+                        img.hidden = true
+                      }}
+                    />
+                    <span className="portrait-unavailable">Image unavailable</span>
+                  </div>
                 )}
                 <span>
                   <b>{String.fromCharCode(65 + i)}</b>
-                  {kind === 'who'
+                  {portraits
                     ? locked
                       ? (feedback?.solution.credits?.find((c) => c.id === o.id)
                           ?.subject ?? 'Portrait ' + (i + 1))

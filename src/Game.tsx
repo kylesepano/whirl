@@ -95,7 +95,7 @@ function RoundView({
           style={{ '--accent': cat.color } as CSSProperties}
         >
           <cat.icon size={16} /> {cat.label} ·{' '}
-          {round.display.mechanic === 'text' ? 'Text clue' : cat.name}
+          {round.display.mechanic === 'choice' ? 'Multiple choice' : cat.name}
         </span>
         {remaining !== null && !feedback && (
           <span className={'timer ' + (expired ? 'expired' : '')}>
@@ -176,7 +176,7 @@ function RoundView({
       ) : (
         <div className="question-foot">
           <span className="muted">
-            {round.kind === 'what' && round.display.mechanic !== 'text'
+            {round.kind === 'what' && !['text', 'choice'].includes(round.display.mechanic ?? '')
               ? 'Reveals reduce the maximum score.'
               : 'Up to ' + number(round.display.maxScore ?? 1000) + ' points'}
           </span>
@@ -262,13 +262,15 @@ function GameSession({ id, results }: { id: string; results: boolean }) {
     )
   const s = session.data,
     last = s.rounds.at(-1)
+  const focusLabel = categories.find(({ kind }) => kind === s.category)?.label
+  const categoryLabel = focusLabel ? focusLabel + ' only' : undefined
   if (results)
     return (
       <>
         <PageTitle
           eyebrow="SESSION REPORT"
           title={s.finished_at ? 'Session complete' : 'Results so far'}
-          text={modeName(s.mode)}
+          text={[modeName(s.mode), categoryLabel].filter(Boolean).join(' · ')}
         />
         <div className="panel result-summary">
           <Trophy size={32} />
@@ -341,9 +343,7 @@ function GameSession({ id, results }: { id: string; results: boolean }) {
   }
   return (
     <>
-      <PageTitle
-        title={modeName(s.mode)}
-      >
+      <PageTitle title={modeName(s.mode)} text={categoryLabel}>
         <div className="session-status">
           <span>
             <Zap size={17} />
@@ -393,7 +393,7 @@ function GameSession({ id, results }: { id: string; results: boolean }) {
                 ? 'Open the next question in this assessment.'
                 : 'The wheel selects from available, verified questions.'}
             </p>
-            {s.eligible.length < 6 && (
+            {!categoryLabel && s.eligible.length < categories.length && (
               <p className="muted">
                 Dimmed categories have no questions for this session.
               </p>
