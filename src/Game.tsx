@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -221,6 +221,13 @@ function GameSession({ id, results }: { id: string; results: boolean }) {
     queryKey: ['session', id],
     queryFn: () => play<Session>('session', { id }),
   })
+  const legacyCategory = session.data?.category
+  const configured = session.data?.categories ?? (legacyCategory ? [legacyCategory] : null)
+  const slices = configured
+    ? categories.filter(({ kind }) => configured.includes(kind))
+    : categories
+  const singleCategory = slices.length === 1
+  const openedFirstRound = useRef(false)
   const refresh = () => {
     void session.refetch()
   }
@@ -241,11 +248,23 @@ function GameSession({ id, results }: { id: string; results: boolean }) {
     onMutate: () => setPhase('selecting'),
     onSuccess: (r) => {
       setFresh(r)
-      setRotation((angle) => spinToCategory(angle, r.kind))
+      if (singleCategory) {
+        setAdvance(false)
+        setPhase('ready')
+        return
+      }
+      setRotation((angle) => spinToCategory(angle, r.kind, slices))
       setPhase('spinning')
     },
     onError: () => setPhase('ready'),
   })
+  const openRound = spin.mutate
+  useEffect(() => {
+    if (!singleCategory || results || openedFirstRound.current ||
+        !session.data || session.data.finished_at || session.data.rounds.length) return
+    openedFirstRound.current = true
+    openRound()
+  }, [openRound, results, session.data, singleCategory])
   const finish = useMutation({
     mutationFn: () => play<Session>('finish', { id }),
     onSuccess: (s) => {
@@ -262,8 +281,9 @@ function GameSession({ id, results }: { id: string; results: boolean }) {
     )
   const s = session.data,
     last = s.rounds.at(-1)
-  const focusLabel = categories.find(({ kind }) => kind === s.category)?.label
-  const categoryLabel = focusLabel ? focusLabel + ' only' : undefined
+  const categoryLabel = singleCategory
+    ? slices[0].label + ' only'
+    : slices.length < categories.length ? slices.map(({ label }) => label).join(' · ') : undefined
   if (results)
     return (
       <>
@@ -340,6 +360,7 @@ function GameSession({ id, results }: { id: string; results: boolean }) {
     }
     setFresh(null)
     setAdvance(true)
+    if (singleCategory) openRound()
   }
   return (
     <>
@@ -369,10 +390,24 @@ function GameSession({ id, results }: { id: string; results: boolean }) {
               : 'Next round'
           }
         />
+      ) : singleCategory ? (
+        <div className="panel padded stack">
+          {spin.error ? (
+            <>
+              <ErrorBox error={message(spin.error)} />
+              <div><Button onClick={() => openRound()}>Retry question</Button></div>
+            </>
+          ) : s.finished_at ? (
+            <Link to={'/results/' + id}>View results</Link>
+          ) : (
+            <p role="status">Loading question…</p>
+          )}
+        </div>
       ) : (
         <div className="game-stage panel">
           <Wheel
             rotation={rotation}
+            slices={slices}
             eligible={s.eligible}
             selected={selected}
             onSpinComplete={onSpinComplete}
@@ -393,7 +428,7 @@ function GameSession({ id, results }: { id: string; results: boolean }) {
                 ? 'Open the next question in this assessment.'
                 : 'The wheel selects from available, verified questions.'}
             </p>
-            {!categoryLabel && s.eligible.length < categories.length && (
+            {s.eligible.length < slices.length && (
               <p className="muted">
                 Dimmed categories have no questions for this session.
               </p>

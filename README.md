@@ -14,7 +14,7 @@ npm.cmd ci
 npm.cmd run dev
 ```
 
-Visit **http://127.0.0.1:5173/** and choose a game mode. Keep **All categories** for a mixed game, or choose a single category such as **WHERE only**. Guests can play without an account form. A game's answers and score are available on its results page.
+Visit **http://127.0.0.1:5173/** and choose a game mode. Keep **All categories** or select any combination of category cards. One category opens questions directly. Two or more put just those categories on the wheel. Guests can play without an account form. A game's answers and score are available on its results page.
 
 The development server binds to loopback and stores its PostgreSQL database under the ignored `.whirl/` directory. WHERE rounds use MapLibre and bundled Natural Earth data. Country questions highlight the full country and provide a country list. Location questions accept a map pin or coordinates. The maps need no tile service or API key.
 

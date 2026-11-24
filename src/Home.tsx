@@ -11,7 +11,7 @@ import {
   type Session,
   type User,
 } from './api'
-import { categories, ErrorBox, PageTitle } from './components/shared'
+import { categories, CategoryGrid, ErrorBox, PageTitle } from './components/shared'
 import { Button } from './components/ui/button'
 const modes = [
   {
@@ -26,7 +26,7 @@ const modes = [
     id: 'classic',
     label: 'Classic Roulette',
     detail: '10 questions',
-    description: 'The signature WHIRL experience across six categories.',
+    description: 'Ten rounds in the categories you choose.',
     icon: Orbit,
     color: '#b196ff',
   },
@@ -42,7 +42,7 @@ const modes = [
     id: 'practice',
     label: 'Practice',
     detail: 'Unlimited questions',
-    description: 'Spin at your own pace for as many rounds as you like.',
+    description: 'Play at your own pace for as many rounds as you like.',
     icon: InfinityIcon,
     color: '#91e3bb',
   },
@@ -113,7 +113,7 @@ export function PlayModes({
 }) {
   const [starting, setStarting] = useState(''),
     [error, setError] = useState('')
-  const [category, setCategory] = useState<Kind | ''>('')
+  const [selected, setSelected] = useState<Kind[]>([])
   const navigate = useNavigate()
   async function start(mode: string) {
     setStarting(mode)
@@ -121,7 +121,12 @@ export function PlayModes({
     try {
       const person = await ensureGuestSession()
       if (person.id !== user?.id) onUser(person)
-      const s = await play<Session>('start', { mode, category: category || null })
+      const s = await play<Session>('start', {
+        mode,
+        ...(selected.length > 0 && selected.length < categories.length
+          ? { categories: selected }
+          : {}),
+      })
       navigate('/play/session/' + s.id)
     } catch (e) {
       setError(message(e))
@@ -132,24 +137,10 @@ export function PlayModes({
     <>
       <PageTitle
         title="Play WHIRL"
-        text="Choose a category and a game mode, then spin the wheel."
+        text="Pick one or more categories, then choose a game mode."
       />
       {error && <ErrorBox error={error} />}
-      <label className="play-category">
-        Question category
-        <select
-          value={category}
-          onChange={(event) => setCategory(event.target.value as Kind | '')}
-          disabled={Boolean(starting)}
-        >
-          <option value="">All categories</option>
-          {categories.map(({ kind, label, name }) => (
-            <option key={kind} value={kind}>
-              {label} only · {name}
-            </option>
-          ))}
-        </select>
-      </label>
+      <CategoryGrid selected={selected} onChange={setSelected} disabled={Boolean(starting)} />
       <div className="mode-grid">
         {modes.map(({ id, label, detail, description, icon: Icon, color }) => (
           <div className="mode-card panel" key={id}>

@@ -1,5 +1,6 @@
 import {
   AlertCircle,
+  Check,
   Compass,
   MapPin,
   ScanLine,
@@ -69,11 +70,14 @@ export const categories = [
     icon: ListOrdered,
   },
 ] as const
-const sliceDegrees = 360 / categories.length
+type WheelCategory = (typeof categories)[number]
 
-export function spinToCategory(rotation: number, kind: Kind) {
-  const target =
-    -categories.findIndex((category) => category.kind === kind) * sliceDegrees
+export function spinToCategory(
+  rotation: number,
+  kind: Kind,
+  slices: readonly WheelCategory[] = categories,
+) {
+  const target = (-slices.findIndex((category) => category.kind === kind) * 360) / slices.length
   const remaining = (((target - rotation) % 360) + 360) % 360
   return rotation + 1440 + remaining
 }
@@ -81,15 +85,18 @@ export function spinToCategory(rotation: number, kind: Kind) {
 export function Wheel({
   rotation = 0,
   eligible,
+  slices = categories,
   selected,
   onSpinComplete,
 }: {
   rotation?: number
   eligible?: Kind[]
+  slices?: readonly WheelCategory[]
   selected?: Kind
   onSpinComplete?: () => void
 }) {
   const reduced = useReducedMotion()
+  const sliceDegrees = 360 / slices.length
   const angle = useMotionValue(rotation)
   const upright = useTransform(angle, (value) => -value)
   useEffect(() => {
@@ -111,10 +118,15 @@ export function Wheel({
       <i className="star star-b" />
       <i className="star star-c" />
       <i className="star star-d" />
-      <div className="wheel-frame">
+      <div
+        className="wheel-frame"
+        style={
+          { '--slice-size': sliceDegrees + 'deg', '--half-slice': sliceDegrees / 2 + 'deg' } as CSSProperties
+        }
+      >
         <div className="wheel-pointer" />
         <motion.div className="wheel-face" style={{ rotate: angle }}>
-          {categories.map(({ kind, color }, i) => (
+          {slices.map(({ kind, color }, i) => (
             <div
               key={kind}
               data-category={kind}
@@ -131,7 +143,7 @@ export function Wheel({
               }
             />
           ))}
-          {categories.map(({ kind, label, color, icon: Icon }, i) => {
+          {slices.map(({ kind, label, color, icon: Icon }, i) => {
             const radians = (i * sliceDegrees * Math.PI) / 180
             return (
               <div
@@ -160,23 +172,63 @@ export function Wheel({
     </div>
   )
 }
-export function CategoryGrid() {
+export function CategoryGrid({
+  selected,
+  onChange,
+  disabled,
+}: {
+  selected: Kind[]
+  onChange: (selected: Kind[]) => void
+  disabled: boolean
+}) {
+  const all = selected.length === 0 || selected.length === categories.length
   return (
-    <div className="category-grid">
-      {categories.map(({ color, label, detail, icon: Icon }) => (
-        <div
-          className="category-card"
-          key={label}
-          style={{ '--accent': color } as CSSProperties}
-        >
-          <div className="icon-box">
-            <Icon size={19} />
-          </div>
-          <strong>{label}</strong>
-          <span>{detail}</span>
+    <section className="category-picker" aria-labelledby="category-heading">
+      <div className="category-picker-heading">
+        <h2 id="category-heading">Question categories</h2>
+        <div className="category-picker-actions">
+          <span aria-live="polite">
+            {!all && selected.length + ' selected'}
+          </span>
+          <button
+            type="button"
+            className="category-all"
+            aria-pressed={all}
+            onClick={() => onChange(categories.map(({ kind }) => kind))}
+            disabled={disabled}
+          >
+            {all && <Check size={15} />}
+            All categories
+          </button>
         </div>
-      ))}
-    </div>
+      </div>
+      <div className="category-grid">
+        {categories.map(({ color, kind, label, name, icon: Icon }) => {
+          const active = selected.includes(kind)
+          return (
+            <button
+              type="button"
+              className="category-card"
+              key={kind}
+              style={{ '--accent': color } as CSSProperties}
+              aria-pressed={active}
+              aria-label={label + ' · ' + name}
+              disabled={disabled}
+              onClick={() => onChange(active ? selected.filter((item) => item !== kind) : [...selected, kind])}
+            >
+              <span className="category-card-top">
+                <span className="icon-box"><Icon size={20} /></span>
+                <span className="category-check" aria-hidden="true">
+                  {active && <Check size={13} />}
+                </span>
+              </span>
+              <strong>{label}</strong>
+              <span>{name}</span>
+            </button>
+          )
+        })}
+      </div>
+    </section>
   )
 }
 export function PageTitle({

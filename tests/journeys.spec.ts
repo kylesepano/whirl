@@ -5,9 +5,15 @@ const adminPassword = 'playwright-local-admin'
 const submitAnswer = (page: Page) =>
   page.getByRole('button', { name: 'Submit answer' })
 
-async function start(page: Page, mode: string, category?: string) {
+async function selectCategories(page: Page, categories: string[]) {
+  for (const category of categories) {
+    await page.getByRole('button', { name: new RegExp('^' + category.toUpperCase() + ' ·') }).click()
+  }
+}
+
+async function start(page: Page, mode: string, categories: string[] = []) {
   await page.goto('/')
-  if (category) await page.getByLabel('Question category').selectOption(category)
+  await selectCategories(page, categories)
   await page.getByRole('button', { name: 'Start ' + mode }).click()
   await expect(page).toHaveURL(/\/play\/session\//)
 }
@@ -43,16 +49,18 @@ async function answer(page: Page, kind: string) {
   await expect(page.locator('.feedback')).toBeVisible()
 }
 
-test('the animated wheel stops at the server category before opening the question', async ({
+test('the two-category wheel stops at the server category before opening the question', async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' })
-  await start(page, 'Quick Play')
+  await start(page, 'Quick Play', ['who', 'where'])
+  await expect(page.locator('.wheel-label')).toHaveText(['WHO', 'WHERE'])
   const response = page.waitForResponse(
     (r) => r.url().endsWith('/api/play/spin') && r.ok(),
   )
   await page.getByRole('button', { name: 'Spin the wheel' }).click()
   const { kind } = await (await response).json()
+  expect(['who', 'where']).toContain(kind)
   await expect(
     page.getByRole('status').filter({ hasText: 'Spinning…' }),
   ).toBeVisible()
@@ -118,16 +126,39 @@ test('guest completes Quick Play and sees session results after a reload', async
   ).toBeVisible()
 })
 
-test('a guest can play only WHO and keep the category after a reload', async ({ page }) => {
-  await start(page, 'Quick Play', 'who')
+test('WHO-only games open questions directly and keep the category after a reload', async ({ page }) => {
+  await start(page, 'Quick Play', ['who'])
   await expect(page.getByText('WHO only', { exact: true })).toBeVisible()
-  expect(await spin(page)).toBe('WHO')
+  await expect(page.locator('.category-badge')).toContainText('WHO')
+  await expect(page.locator('.wheel-scene')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Spin the wheel' })).toHaveCount(0)
+  const prompt = await page.locator('.question h2').innerText()
   await answer(page, 'WHO')
   await page.reload()
   await expect(page.getByText('WHO only', { exact: true })).toBeVisible()
   await expect(page.locator('.feedback')).toBeVisible()
   await page.getByRole('button', { name: 'Next round' }).click()
-  expect(await spin(page)).toBe('WHO')
+  await expect(page.locator('.category-badge')).toContainText('WHO')
+  await expect(page.locator('.question h2')).not.toHaveText(prompt)
+  await expect(page.locator('.wheel-scene')).toHaveCount(0)
+})
+
+test('category cards support selecting five categories and resetting to all', async ({ page }) => {
+  await page.goto('/')
+  const all = page.getByRole('button', { name: 'All categories' })
+  await expect(all).toHaveAttribute('aria-pressed', 'true')
+  await selectCategories(page, ['who', 'where'])
+  await expect(page.locator('.category-card[aria-pressed="true"]')).toHaveCount(2)
+  await expect(all).toHaveAttribute('aria-pressed', 'false')
+  await all.click()
+  await expect(all).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.category-card[aria-pressed="true"]')).toHaveCount(6)
+  const five = ['who', 'where', 'when', 'what', 'how']
+  await selectCategories(page, ['why'])
+  await expect(page.locator('.category-card[aria-pressed="true"]')).toHaveCount(5)
+  await page.getByRole('button', { name: 'Start Quick Play' }).click()
+  await expect(page.locator('.wheel-label')).toHaveText(five.map((kind) => kind.toUpperCase()))
+  expect(five.map((kind) => kind.toUpperCase())).toContain(await spin(page))
 })
 
 test('admin signs in, adds, edits, publishes and deletes a question', async ({

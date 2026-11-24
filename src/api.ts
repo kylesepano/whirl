@@ -67,6 +67,7 @@ export type Session = {
   total: number
   target: number | null
   category?: Kind | null
+  categories?: Kind[] | null
   rounds: Round[]
   eligible: Kind[]
   finished_at: string | null

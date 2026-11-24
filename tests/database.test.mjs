@@ -334,7 +334,11 @@ describe('server scoring', () => {
 describe('game session', () => {
   it('keeps focused play in the selected category across rounds and reloads', async () => {
     await expect(game('start', { mode: 'quick', category: 'sports' }))
-      .rejects.toThrow('Choose a valid question category')
+      .rejects.toThrow('valid question category')
+    for (const categories of [[], ['who', null], ['who', 'sports'], 'who']) {
+      await expect(game('start', { mode: 'quick', categories }))
+        .rejects.toThrow('valid question category')
+    }
     for (const category of ['who', 'where']) {
       const session = await game('start', { mode: 'quick', category })
       expect(session).toMatchObject({ category, eligible: [category], target: 5 })
@@ -354,6 +358,22 @@ describe('game session', () => {
       expect(reloaded.finished_at).toBeTruthy()
       expect(reloaded.rounds.map(({ kind }) => kind)).toEqual(Array(5).fill(category))
     }
+  })
+
+  it('stores a category subset and limits the round pool to that subset', async () => {
+    const subset = ['where', 'who']
+    const session = await game('start', { mode: 'quick', categories: subset })
+    expect(session.categories).toEqual(subset)
+    expect(session.eligible.slice().sort()).toEqual(subset)
+    for (let i = 0; i < 5; i++) {
+      const round = await game('spin', { id: session.id })
+      expect(subset).toContain(round.kind)
+      const answer = round.kind === 'who'
+        ? round.display.options[0].id
+        : round.display.mechanic === 'country' ? { country: 'CHN' } : { lat: 0, lng: 0 }
+      await game('submit', { id: session.id, round: round.id, answer })
+    }
+    expect((await game('session', { id: session.id })).categories).toEqual(subset)
   })
 
   it('keeps the seeded country private until submitting a guess', async () => {
