@@ -70,28 +70,6 @@ export type Session = {
   eligible: Kind[]
   finished_at: string | null
 }
-export type SessionRow = {
-  id: string
-  mode: string
-  points: number
-  created_at: string
-  finished_at: string | null
-  target: number | null
-}
-export type Stat = { name: string; score: number; n: number; passed?: number }
-export type Stats = {
-  answered: number
-  accuracy: number
-  xp: number
-  best: number
-  streak: number
-  perfect: number
-  minutes: number
-  subjects: Stat[]
-  categories: Stat[]
-  sessions: SessionRow[]
-  mistakes: { id: string; prompt: string; score: number; position: number }[]
-}
 export type Question = {
   id: string
   kind: Kind

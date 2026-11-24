@@ -223,7 +223,6 @@ function GameSession({ id, results }: { id: string; results: boolean }) {
   })
   const refresh = () => {
     void session.refetch()
-    void client.invalidateQueries({ queryKey: ['work'] })
   }
   const onSpinComplete = useCallback(() => setPhase('landed'), [])
   useEffect(() => {
@@ -343,15 +342,7 @@ function GameSession({ id, results }: { id: string; results: boolean }) {
   return (
     <>
       <PageTitle
-        eyebrow={
-          s.mode === 'assessment' ? 'COURSE ASSESSMENT' : 'THE GAME ROOM'
-        }
         title={modeName(s.mode)}
-        text={
-          s.mode === 'practice'
-            ? 'Practice scores stay off the leaderboard.'
-            : undefined
-        }
       >
         <div className="session-status">
           <span>

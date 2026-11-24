@@ -14,7 +14,7 @@ npm.cmd ci
 npm.cmd run dev
 ```
 
-Visit **http://127.0.0.1:5173/** and select **Play Roulette**. Guests can play without an account form. Results and progress are tied to the session in the same browser.
+Visit **http://127.0.0.1:5173/** and choose a game mode. Guests can play without an account form. A game's answers and score are available on its results page.
 
 The development server binds to loopback and stores its PostgreSQL database under the ignored `.whirl/` directory. WHERE rounds use MapLibre and bundled Natural Earth data. Country questions highlight the full country and provide a country list. Location questions accept a map pin or coordinates. The maps need no tile service or API key.
 
@@ -25,7 +25,7 @@ See [DEMO.md](DEMO.md) for a guided walkthrough.
 1. Stop the running server with **Ctrl+C** if needed.
 2. Copy `.env.example` to `.env.local` if the file does not exist. Set `WHIRL_ADMIN_EMAIL` and `WHIRL_ADMIN_PASSWORD`. Keep this file private.
 3. Run `npm.cmd run dev`. The server creates the admin on first boot with those settings. An existing admin keeps their password.
-4. Choose **Admin sign in → Questions**. Create or edit a question, save it for review, and publish it after checking the source. To delete a question, open it and confirm **Delete question**. Saved quiz results are preserved.
+4. Go directly to **http://127.0.0.1:5173/login**. Sign in to open the Question Bank. Create or edit a question, save it for review, and publish it after checking the source. To delete a question, open it and confirm **Delete question**. Saved quiz results are preserved.
 
 ## Test and build
 
@@ -55,7 +55,7 @@ Keep the local admin password and database connection strings server-side. The l
 - [Question sourcing, asset rights, and importer](docs/content.md)
 - [Implementation status and remaining work](PROGRESS.md)
 
-The bundled bank contains **1,357 published questions**, with more than 1,000 across General knowledge, History, Science, Movie & TV series, Literature, Sports, Geography, Music, and Pop culture. It also includes Animals, Space & Astronomy, Food & Drink, Art & Design, and Games & Hobbies. Open **Question bank** to search or filter by subject and roulette category.
+The bundled bank contains **10,802 published questions** across General knowledge, History, Science, Movie & TV series, Literature, Sports, Geography, Music, Pop culture, and other subjects. Admins can search the Question Bank by question, subject, or topic and filter by publication status.
 
 New bundled questions load on local server startup or when the latest migrations are applied to hosted Supabase. The separate Wikidata importer stores dated claims as review candidates.
 

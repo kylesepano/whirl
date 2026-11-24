@@ -153,35 +153,14 @@ small {
 .skip:focus {
   transform: none;
 }
-.sidebar {
-  width: 230px;
-  position: fixed;
-  inset: 0 auto 0 0;
-  display: flex;
-  flex-direction: column;
-  z-index: 5;
-  background: #0e101d;
-  border-right: 1px solid #202337;
-  padding: 0 17px;
-}
 .brand {
-  height: 83px;
   display: flex;
   align-items: center;
   gap: 11px;
-  padding: 0 10px;
   font-weight: 850;
   font-size: 1.35rem;
   letter-spacing: 0.13em;
   line-height: 1.05;
-}
-.brand small {
-  display: block;
-  color: #9395b2;
-  font-size: 0.61rem;
-  font-weight: 650;
-  letter-spacing: 0.147em;
-  margin-top: 5px;
 }
 .brand-glyph {
   height: 38px;
@@ -194,75 +173,6 @@ small {
   border-radius: 11px;
   color: white;
 }
-.sidebar nav {
-  overflow: auto;
-}
-.nav-caption {
-  font-size: 0.66rem;
-  color: #888eab;
-  letter-spacing: 0.13em;
-  font-weight: 730;
-  padding: 19px 10px 9px;
-}
-.nav-link {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  border-radius: 8px;
-  margin-bottom: 3px;
-  padding: 11px 10px;
-  color: #adb1c7;
-  font-size: 0.89rem;
-  font-weight: 570;
-  border: 1px solid transparent;
-  transition:
-    background 0.2s,
-    color 0.2s;
-}
-.nav-link:hover {
-  background: #191c2d;
-  color: #e8e5fb;
-}
-.nav-link.active {
-  background: #211b37;
-  border-color: #9c7afb2f;
-  color: #cbb9ff;
-}
-.side-foot {
-  margin-top: auto;
-  padding: 20px 2px;
-  color: #858aa4;
-  font-size: 0.61rem;
-  letter-spacing: 0.105em;
-  font-weight: 650;
-}
-.side-orbit {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 12px 9px;
-  margin-bottom: 13px;
-  border-radius: 9px;
-  background: #17172b;
-  border: 1px solid #24243b;
-  color: #b9a4ff;
-  letter-spacing: 0;
-}
-.side-orbit strong,
-.side-orbit small {
-  display: block;
-}
-.side-orbit strong {
-  font-size: 0.78rem;
-}
-.side-orbit small {
-  font-size: 0.7rem;
-  color: var(--muted);
-  margin-top: 2px;
-}
-.app-body {
-  margin-left: 230px;
-}
 .topbar {
   height: 68px;
   padding: 0 32px;
@@ -272,74 +182,16 @@ small {
   border-bottom: 1px solid #202334;
   background: #0d0f1b;
 }
-.top-title,
 .top-actions {
   display: flex;
   align-items: center;
   gap: 12px;
-}
-.top-title {
-  font-size: 0.93rem;
-  font-weight: 650;
-  color: #dadbef;
+  font-size: 0.875rem;
 }
 .content {
   width: min(1440px, 100%);
   margin: auto;
   padding: 28px 32px 46px;
-}
-.mobile-menu,
-.mobile-cover {
-  display: none;
-}
-.account-wrap {
-  position: relative;
-}
-.account {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: transparent;
-  color: #ece9fc;
-  border: 0;
-  font-size: 0.85rem;
-}
-.avatar {
-  width: 33px;
-  height: 33px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: #32294f;
-  color: #ded0ff;
-  font-weight: 800;
-}
-.account-menu {
-  position: absolute;
-  right: 0;
-  top: 45px;
-  min-width: 150px;
-  padding: 7px;
-  z-index: 9;
-  box-shadow: 0 14px 25px #0008;
-}
-.account-menu a,
-.account-menu button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 9px;
-  text-align: left;
-  background: none;
-  border: 0;
-  color: inherit;
-  font: inherit;
-  border-radius: 5px;
-}
-.account-menu a:hover,
-.account-menu button:hover {
-  background: #29243f;
 }
 .button {
   min-height: 44px;
@@ -1500,13 +1352,6 @@ small {
   accent-color: var(--purple);
 }
 @media (max-width: 1110px) {
-  .sidebar {
-    width: 196px;
-    padding-inline: 12px;
-  }
-  .app-body {
-    margin-left: 196px;
-  }
   .content,
   .topbar {
     padding-inline: 22px;
@@ -1534,31 +1379,6 @@ small {
   }
 }
 @media (max-width: 850px) {
-  .mobile-menu {
-    display: grid;
-    padding: 0;
-  }
-  .mobile-cover {
-    display: block;
-    position: fixed;
-    inset: 0;
-    z-index: 4;
-    background: #060611a8;
-    border: 0;
-  }
-  .sidebar {
-    transform: translateX(-105%);
-    transition: transform 0.2s ease;
-    width: 225px;
-    visibility: hidden;
-  }
-  .sidebar-open {
-    transform: none;
-    visibility: visible;
-  }
-  .app-body {
-    margin: 0;
-  }
   .topbar {
     height: 58px;
   }
@@ -1699,14 +1519,5 @@ small {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
-  }
-}
-
-.topbar .mobile-menu {
-  display: none;
-}
-@media (max-width: 850px) {
-  .topbar .mobile-menu {
-    display: grid;
   }
 }

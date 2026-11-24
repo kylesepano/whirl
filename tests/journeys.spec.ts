@@ -7,7 +7,6 @@ const submitAnswer = (page: Page) =>
 
 async function start(page: Page, mode: string) {
   await page.goto('/')
-  await page.getByRole('link', { name: 'Play Roulette' }).click()
   await page.getByRole('button', { name: 'Start ' + mode }).click()
   await expect(page).toHaveURL(/\/play\/session\//)
 }
@@ -96,7 +95,7 @@ test('the animated wheel stops at the server category before opening the questio
   )
 })
 
-test('guest completes Quick Play and sees results and progress after a reload', async ({
+test('guest completes Quick Play and sees session results after a reload', async ({
   page,
 }) => {
   await start(page, 'Quick Play')
@@ -114,10 +113,9 @@ test('guest completes Quick Play and sees results and progress after a reload', 
     page.getByRole('heading', { name: 'Session complete' }),
   ).toBeVisible()
   await expect(page.locator('.results-list details')).toHaveCount(5)
-  await page.getByRole('link', { name: 'My progress' }).click()
-  await expect(
-    page.getByText('5 questions answered', { exact: false }),
-  ).toBeVisible()
+  await page.getByRole('link', { name: 'Play again' }).click()
+  await expect(page.getByRole('button', { name: 'Start Quick Play' })).toBeVisible()
+  await expect(page.getByText('My progress')).toHaveCount(0)
   await page.goto('/admin/questions')
   await expect(
     page.getByRole('heading', { name: 'Admin sign in' }),
@@ -137,6 +135,12 @@ test('admin signs in, adds, edits, publishes and deletes a question', async ({
   await page.getByLabel('Password', { exact: true }).fill(adminPassword)
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
   await expect(page).toHaveURL(/\/admin\/questions/)
+  await expect(page.getByRole('heading', { name: 'Question bank' })).toBeVisible()
+  const search = page.getByLabel('Search questions')
+  await search.fill('wild giant pandas')
+  await expect(page.getByRole('button', { name: /Which country is home to wild giant pandas/ })).toBeVisible()
+  await search.clear()
+  await page.getByRole('button', { name: 'New question' }).click()
   const title = 'Test review ' + Date.now()
   const prompt = 'Which country is the setting of ' + title + '?'
   const updated = prompt.replace('the setting of', 'featured in')
@@ -191,28 +195,21 @@ test('admin signs in, adds, edits, publishes and deletes a question', async ({
   ).toHaveCount(0)
 })
 
-test('mobile navigation and landing have no horizontal overflow', async ({
-  page,
-}) => {
+test('mobile opens directly to Play without public admin or player tracking links', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')
-  await expect(
-    page.getByRole('heading', { name: 'Spin. Think. Discover.' }),
-  ).toBeVisible()
-  expect(
-    await page.evaluate(() => document.documentElement.scrollWidth),
-  ).toBeLessThanOrEqual(390)
-  await page.getByRole('button', { name: 'Open navigation' }).click()
-  await page
-    .getByRole('complementary', { name: 'Main navigation' })
-    .getByRole('link', { name: 'Question bank', exact: true })
-    .click()
-  await expect(
-    page.getByRole('heading', { name: 'Question bank' }),
-  ).toBeVisible()
-  const subject = page.getByRole('combobox', { name: 'Question subject' })
-  await subject.selectOption('Sports')
-  await expect(page.getByRole('cell', { name: 'Sports', exact: true })).toHaveCount(24)
+  await expect(page.getByRole('heading', { name: 'Play WHIRL' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Start Quick Play' })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+  await expect(page.getByRole('complementary')).toHaveCount(0)
+  await expect(page.locator('a[href="/login"], a[href="/question-bank"], a[href="/leaderboard"]')).toHaveCount(0)
+  for (const path of ['/progress', '/achievements', '/leaderboard']) {
+    await page.goto(path)
+    await expect(page.getByRole('heading', { name: 'Play WHIRL' })).toBeVisible()
+  }
+  await page.goto('/question-bank')
+  await expect(page).toHaveURL(/\/login$/)
+  await expect(page.getByRole('heading', { name: 'Admin sign in' })).toBeVisible()
 })
 
 test('WHERE loads the bundled world map and accepts a pin and coordinates', async ({

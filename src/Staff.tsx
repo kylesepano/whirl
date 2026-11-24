@@ -6,9 +6,8 @@ import {
   useState,
   type FormEvent,
 } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { FileQuestion, ShieldCheck } from 'lucide-react'
+import { FileQuestion } from 'lucide-react'
 import {
   message,
   supabase,
@@ -33,142 +32,16 @@ import {
   SolutionDetails,
   validAnswer,
 } from './components/QuestionControls'
-import { Button, buttonStyle } from './components/ui/button'
-import { Chart } from './Workspace'
+import { Button } from './components/ui/button'
 import { FocusDialog } from './Game'
 import type { Point } from './MapGuess'
 import { CountrySelect, countriesByCode } from './CountrySelect'
 const MapPicker = lazy(() => import('./MapGuess'))
-const adminTabs = [
-  ['dashboard', 'Overview'],
-  ['questions', 'Questions'],
-  ['review-queue', 'Review queue'],
-  ['import', 'Imports'],
-  ['media', 'Media'],
-  ['analytics', 'Analytics'],
-]
 export default function Staff() {
-  const page = useLocation().pathname.split('/')[2] || 'dashboard'
   return (
     <>
-      <PageTitle
-        eyebrow="ADMINISTRATION"
-        title={adminTabs.find(([path]) => path === page)?.[1] ?? 'Overview'}
-        text="Manage the question bank and review content before publishing."
-      />
-      <nav className="staff-tabs" aria-label="Workspace navigation">
-        {adminTabs.map(([path, label]) => (
-          <NavLink
-            key={path}
-            className={buttonStyle({ variant: 'outline', size: 'small' })}
-            to={'/admin/' + path}
-          >
-            {label}
-          </NavLink>
-        ))}
-      </nav>
-      {page === 'questions' || page === 'review-queue' ? (
-        <QuestionManager key={page} queue={page === 'review-queue'} />
-      ) : page === 'media' ? (
-        <Media />
-      ) : (
-        <AdminStats page={page} />
-      )}
-    </>
-  )
-}
-type AdminData = {
-  users: number
-  topics: number
-  publishedTopics: number
-  published: number
-  review: number
-  rejected: number
-  unverified: number
-  missingMedia: number
-  reports: number
-  today: number
-  types: { name: string; n: number }[]
-  subjects: { name: string; n: number }[]
-  jobs: { id: string; source: string; processed: number; updated_at: string }[]
-}
-function AdminStats({ page }: { page: string }) {
-  const q = useWork<AdminData>('admin_stats')
-  if (q.isPending) return <Loading />
-  if (q.error) return <ErrorBox error={message(q.error)} />
-  const s = q.data
-  if (page === 'import')
-    return (
-      <div className="stack">
-        <div className="panel padded stack">
-          <h2>Wikidata ingestion</h2>
-          <p className="muted">
-            Run the importer from the server terminal. Candidates enter the
-            review queue and are playable only after verification.
-          </p>
-          <code>npm run import -- --limit 100</code>
-        </div>
-        {s.jobs.length ? (
-          s.jobs.map((j) => (
-            <div className="panel staff-row" key={j.id}>
-              <strong>{j.source}</strong>
-              <span>{j.processed} processed</span>
-              <small>{new Date(j.updated_at).toLocaleDateString()}</small>
-            </div>
-          ))
-        ) : (
-          <Empty
-            title="No import jobs yet"
-            text="Import progress will appear here after the first batch commits."
-          />
-        )}
-      </div>
-    )
-  const cards = [
-    ['Player profiles', s.users],
-    ['Published variants', s.published],
-    ['Sessions today', s.today],
-    ['Topic bundles', s.topics],
-    ['Published bundles', s.publishedTopics],
-    ['Pending review', s.review],
-    ['Rejected', s.rejected],
-    ['Unverified', s.unverified],
-    ['Missing media', s.missingMedia],
-    ['Player reports', s.reports],
-  ]
-  return (
-    <>
-      <div className="stats-grid">
-        {cards.map(([label, count]) => (
-          <div key={String(label)} className="panel stat-card">
-            <ShieldCheck size={21} color="#b49aff" />
-            <div>
-              <span>{label}</span>
-              <strong>{count}</strong>
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="analytics-grid section">
-        <div className="panel padded">
-          <h2>Published variants by category</h2>
-          <Chart
-            data={s.types.map((t) => ({
-              name: t.name.toUpperCase(),
-              score: t.n,
-            }))}
-          />
-        </div>
-        <div className="panel padded stack">
-          <h2>Topics by subject</h2>
-          {s.subjects.map((r) => (
-            <div key={r.name} className="staff-row">
-              <strong>{r.name}</strong>
-              <span>{r.n}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+      <PageTitle title="Question bank" text="Add, edit, and publish questions for WHIRL." />
+      <QuestionManager />
     </>
   )
 }
@@ -248,8 +121,11 @@ type EditorRecord = {
   topic: { title: string; subject: string }
   warnings: string[]
 }
-function QuestionManager({ queue }: { queue: boolean }) {
-  const [active, setActive] = useState<string | null>(queue ? null : 'new'),
+function QuestionManager() {
+  const [status, setStatus] = useState('')
+  const [search, setSearch] = useState('')
+  const queue = status === 'review'
+  const [active, setActive] = useState<string | null>(null),
     [offset, setOffset] = useState(0),
     [notice, setNotice] = useState('')
   const finishEditing = (id: string | null) => {
@@ -257,7 +133,8 @@ function QuestionManager({ queue }: { queue: boolean }) {
     setActive(id)
   }
   const q = useWork<Question[]>('editor_list', {
-    status: queue ? 'review' : undefined,
+    status: status || undefined,
+    search,
     offset,
   })
   const record = useWork<EditorRecord>(
@@ -273,22 +150,34 @@ function QuestionManager({ queue }: { queue: boolean }) {
   return (
     <div className="detail-grid">
       <div className="panel padded stack">
-        <h2>{queue ? 'Pending review' : 'Question variants'}</h2>
+        <div className="row">
+          <Button variant="outline" size="small" onClick={() => finishEditing('new')}>
+            <FileQuestion size={16} /> New question
+          </Button>
+        </div>
+        <label>
+          Search questions
+          <input value={search} maxLength={100} onChange={(event) => {
+            setSearch(event.target.value)
+            setOffset(0)
+          }} />
+        </label>
+        <label>
+          Status
+          <select value={status} onChange={(event) => {
+            setStatus(event.target.value)
+            setOffset(0)
+          }}>
+            <option value="">All questions</option>
+            <option value="published">Published</option>
+            <option value="review">Pending review</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </label>
         {notice && (
           <p className="success" role="status">
             {notice}
           </p>
-        )}
-        {!queue && (
-          <div>
-            <Button
-              variant="outline"
-              size="small"
-              onClick={() => finishEditing('new')}
-            >
-              <FileQuestion size={16} /> New question
-            </Button>
-          </div>
         )}
         {q.isPending ? (
           <Loading />
@@ -365,7 +254,7 @@ function QuestionManager({ queue }: { queue: boolean }) {
         )
       ) : (
         <Empty
-          title="Select a variant"
+          title="Select a question"
           text="Review question details and source references before publishing."
         />
       )}
@@ -710,6 +599,12 @@ function QuestionEditor({
         </div>
         {area('prompt', 'Question prompt', record?.prompt, true)}
         <div className="stack" key={kind}>
+          {(kind === 'who' || kind === 'what') && !textClue && (
+            <details>
+              <summary>Upload question media</summary>
+              <Media />
+            </details>
+          )}
           {!countryQuestion && field(
             'label',
             'Correct answer label',

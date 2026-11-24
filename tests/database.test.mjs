@@ -78,16 +78,22 @@ describe('authorization and publication', () => {
         await tx.query('select solution from public.questions')
       }),
     ).rejects.toThrow('permission denied')
-    const firstPage = await work('browse', {}, null)
-    const secondPage = await work('browse', { offset: 24 }, null)
+    for (const action of ['browse', 'bank_subjects', 'editor_list']) {
+      await expect(work(action, {}, null)).rejects.toThrow('Administrator')
+      await expect(work(action, {}, guest)).rejects.toThrow('Administrator')
+    }
+    const firstPage = await work('browse', {}, admin)
+    const secondPage = await work('browse', { offset: 24 }, admin)
     expect(firstPage).toHaveLength(24)
     expect(secondPage).toHaveLength(24)
     const browse = [...firstPage, ...secondPage]
     expect(new Set(browse.map(({ id }) => id)).size).toBe(48)
     expect(
-      await work('browse', { search: 'Borobudur', kind: 'where' }, null),
+      await work('browse', { search: 'Borobudur', kind: 'where' }, admin),
     ).toMatchObject([{ title: 'Borobudur Temple', kind: 'where' }])
     expect(JSON.stringify(browse)).not.toMatch(/solution|verified_at|credits/)
+    expect(await work('editor_list', { search: 'wild giant pandas' }, admin))
+      .toMatchObject([{ title: 'Wild giant pandas', status: 'published' }])
   })
   it('blocks incomplete and unconfirmed publication, then publishes verified records', async () => {
     const draft = await work(
@@ -145,7 +151,7 @@ describe('authorization and publication', () => {
       'Animals',
     ]
     const counts = new Map(rows.map(({ subject, count }) => [subject, count]))
-    expect(await work('bank_subjects', {}, null)).toEqual(
+    expect(await work('bank_subjects', {}, admin)).toEqual(
       expect.arrayContaining(subjects),
     )
     const { rows: [bank] } = await db.query(`
@@ -157,7 +163,7 @@ describe('authorization and publication', () => {
     expect(bank.distinct_prompts).toBe(bank.total)
     for (const subject of subjects) {
       expect(counts.get(subject)).toBeGreaterThan(0)
-      const page = await work('browse', { subject }, null)
+      const page = await work('browse', { subject }, admin)
       expect(page).toHaveLength(24)
       expect(page.every((question) => question.subject === subject)).toBe(true)
     }
@@ -194,7 +200,7 @@ describe('authorization and publication', () => {
     )
     await work('delete_question', payload, admin)
     await work('delete_question', payload, admin)
-    expect(await work('browse', { search: fixture.prompt })).toEqual([])
+    expect(await work('browse', { search: fixture.prompt }, admin)).toEqual([])
     expect(
       (await work('editor_list', {}, admin)).some((q) => q.id === id),
     ).toBe(false)
@@ -398,7 +404,13 @@ describe('game session', () => {
       'Session unavailable',
     )
     expect((await game('session', { id: s.id })).total).toBe(total)
-    expect(await work('leaderboard', {}, null)).toEqual([])
+    for (const action of ['stats', 'leaderboard']) {
+      await expect(work(action)).rejects.toThrow('Player tracking is unavailable')
+    }
+    await expect(db.transaction(async (tx) => {
+      await tx.exec('set local role authenticated')
+      await tx.query('select * from public.sessions')
+    })).rejects.toThrow('permission denied')
   })
   it('rejects late scores and returns the saved timeout feedback on retry', async () => {
     const s = await game('start', { mode: 'quick' })

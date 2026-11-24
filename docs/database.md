@@ -15,7 +15,7 @@ Supabase hosts PostgreSQL, Auth, and optional image uploads. The loopback demo a
 
 ## API boundary
 
-RLS is enabled on every application table. Authenticated roles can select only their own profile and sessions through direct database API grants. Question, round, and result access goes through `whirl_workspace` and `whirl_play`, which enforce grants, role checks, and session ownership. Guests receive only public display fields from the question browser. Only the admin can access the editor and review queues. Legacy student and instructor profiles migrate to guest.
+RLS is enabled on every application table. Authenticated roles can select their own profile through direct database API grants. Question bank, round, and result access goes through `whirl_workspace` and `whirl_play`, which enforce admin access or session ownership. Guests receive playable question fields during a round and the answer after submitting. Legacy student and instructor profiles migrate to guest.
 
 Rounds take a private snapshot when opened. Publishing, rejecting, editing, or deleting a question affects future selection. A deleted variant is hidden from the bank and editor while old round snapshots and results remain available. Answer submission locks the owning session and round, writes a unique submission, and closes a finite session at its target. Retrying a submitted round returns the recorded result, with the originally submitted answer. A WHAT reveal retry at the same stage returns the same stage.
 
@@ -29,5 +29,5 @@ Roulette draws uniformly from eligible categories, then selects an eligible ques
 - WHY supports evidence, links in a chain, and explicit observation-to-cause mappings. Incorrect links reduce partial credit down to zero.
 - HOW scores relative pair order. Only the server writes the final score. Expired timed answers receive zero points.
 
-XP, streaks, achievements, and dashboards are derived from durable submissions. Ranked leaderboards use completed quick, classic, and marathon sessions only. Course assessments and practice are excluded.
+Scores and submissions support scoring, retries, and results within an individual game. The app does not aggregate them into leaderboards, achievements, or player progress. Question selection uses only the current session.
 
