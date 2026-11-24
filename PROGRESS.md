@@ -1,5 +1,11 @@
 # Implementation progress
 
+The first question bank expansion brought the bank to 36 questions in 27 reviewed topic bundles.
+
+The general knowledge catalog adds 1,285 source-backed questions across nine subjects, bringing the bundled total to 1,321. The Question bank now filters by subject. WHO and WHAT also support typed clues alongside their existing visual rounds.
+
+The next expansion adds 36 sourced questions in five subjects, bringing the bundled total to 1,357. Animals leads the batch with 14 questions, including reasoning and ordering rounds.
+
 ## Guest play and admin-only question management
 
 - Public quiz modes start a guest session without an account form. Admin sign-in is the only sign-in screen. Previous student and instructor profiles migrate to guest.
@@ -23,14 +29,14 @@
 
 ## Local verification
 
-- 19 Vitest tests and 4 Chromium Playwright journeys passed. The browser suite covers guest play, admin add/edit/publish/delete, mobile navigation, and map scoring with external network requests blocked.
+- 20 Vitest tests and 5 Chromium Playwright journeys passed. Coverage includes the catalog count and subjects, guest play, admin question management, mobile subject filtering, and map scoring with external network requests blocked.
 - The production build succeeded. Vite reports a size warning for the initial bundle and the lazy MapLibre bundle.
-- The default loopback startup returned HTTP 200 and served 21 published variants from a fresh local database.
+- The local database has 1,357 distinct published questions. All five new subjects are available through the public subject filter.
 - A live Wikidata dry run returned candidates. The idempotency test verified that imported records remain in review.
 
 ## Remaining against the full brief
 
-- Build out the reviewed question bank from 16 published bundles to the 1,000-topic subject targets. The current automated import supports referenced inception-date candidates. Editorial sourcing and media review are still needed for other question types and balanced subject coverage.
+- Continue editorial review and add more distinct portrait sets, image reveals, and reasoning puzzles. The broader catalog concentrates on typed clues, timelines, and map pins.
 - Connect a real Supabase project and check email confirmation, hosted Storage uploads, migrations, and Vercel deployment. The external project was unavailable in this workspace.
 - The editor uses structured text fields for some relationships and media credits. Rich graph authoring and a generalized, searchable portrait/media library are future work.
 - Moderation includes player reports and structural checks. Automated source credibility and semantic-duplicate checks, image link monitoring, and bulk licensed media ingestion are pending.

@@ -56,9 +56,9 @@ describe('authorization and publication', () => {
   it('requires a session owner for play and rejects guest admin actions', async () => {
     await expect(game('start', { mode: 'quick' }, null)).rejects.toThrow()
     await expect(work('admin_stats', {})).rejects.toThrow('Administrator')
-    await expect(work('save_question', { ...question, role: 'admin' }, guest)).rejects.toThrow(
-      'Administrator',
-    )
+    await expect(
+      work('save_question', { ...question, role: 'admin' }, guest),
+    ).rejects.toThrow('Administrator')
     await expect(work('delete_question', {}, other)).rejects.toThrow(
       'Administrator',
     )
@@ -78,8 +78,15 @@ describe('authorization and publication', () => {
         await tx.query('select solution from public.questions')
       }),
     ).rejects.toThrow('permission denied')
-    const browse = await work('browse', {}, null)
-    expect(browse).toHaveLength(21)
+    const firstPage = await work('browse', {}, null)
+    const secondPage = await work('browse', { offset: 24 }, null)
+    expect(firstPage).toHaveLength(24)
+    expect(secondPage).toHaveLength(24)
+    const browse = [...firstPage, ...secondPage]
+    expect(new Set(browse.map(({ id }) => id)).size).toBe(48)
+    expect(
+      await work('browse', { search: 'Borobudur', kind: 'where' }, null),
+    ).toMatchObject([{ title: 'Borobudur Temple', kind: 'where' }])
     expect(JSON.stringify(browse)).not.toMatch(/solution|verified_at|credits/)
   })
   it('blocks incomplete and unconfirmed publication, then publishes verified records', async () => {
@@ -113,11 +120,47 @@ describe('authorization and publication', () => {
     ).rejects.toThrow('Administrator')
     await work('review', { question: draft.id, decision: 'reject' }, admin)
   })
-  it('validates all published starter questions', async () => {
+  it('validates all bundled published questions', async () => {
     const { rows } = await db.query(
       "select prompt,public.whirl_validate(kind,presentation,solution,explanation,source_url,source_title) warnings from public.questions where status='published'",
     )
     expect(rows.filter((q) => q.warnings.length)).toEqual([])
+  })
+  it('publishes at least 10,000 distinct questions across the requested subjects', async () => {
+    const { rows } = await db.query(`
+      select t.subject, count(*)::int as count
+      from public.questions q join public.topics t on t.id=q.topic_id
+      where q.status='published' group by t.subject
+    `)
+    const subjects = [
+      'General knowledge',
+      'History',
+      'Science',
+      'Movie & TV series',
+      'Literature',
+      'Sports',
+      'Geography',
+      'Music',
+      'Pop culture',
+      'Animals',
+    ]
+    const counts = new Map(rows.map(({ subject, count }) => [subject, count]))
+    expect(await work('bank_subjects', {}, null)).toEqual(
+      expect.arrayContaining(subjects),
+    )
+    const { rows: [bank] } = await db.query(`
+      select count(*)::int as total,
+             count(distinct lower(trim(prompt)))::int as distinct_prompts
+      from public.questions where status='published' and verified_at is not null
+    `)
+    expect(bank.total).toBeGreaterThanOrEqual(10000)
+    expect(bank.distinct_prompts).toBe(bank.total)
+    for (const subject of subjects) {
+      expect(counts.get(subject)).toBeGreaterThan(0)
+      const page = await work('browse', { subject }, null)
+      expect(page).toHaveLength(24)
+      expect(page.every((question) => question.subject === subject)).toBe(true)
+    }
   })
   it('deletes a published variant without losing a round or preventing a replacement', async () => {
     const fixture = {
@@ -165,6 +208,24 @@ describe('authorization and publication', () => {
   })
 })
 describe('server scoring', () => {
+  it('scores country picks by code and rejects invalid answers', async () => {
+    const solution = { country: 'CHN', label: 'China' }
+    expect(await score('where', solution, { country: 'CHN' })).toEqual({
+      score: 1000,
+      solution,
+    })
+    expect(await score('where', solution, { country: 'RUS' })).toEqual({
+      score: 0,
+      solution,
+    })
+    await expect(score('where', solution, { country: 'ZZZ' })).rejects.toThrow('Select a valid country')
+    await expect(score('where', solution, { lat: 30, lng: 120 })).rejects.toThrow('Select a valid country')
+    const countryDraft = { ...question, kind: 'where', presentation: { mechanic: 'country' }, solution }
+    expect(await work('validate', countryDraft, admin)).toEqual([])
+    expect(await work('validate', { ...countryDraft, solution: { label: 'Unknown', country: 'ZZZ' } }, admin))
+      .toContain('Choose a valid target country.')
+  })
+
   it('calculates great-circle distances and regional scoring', async () => {
     const target = { lat: 0, lng: 0, scale: 500, label: 'Target' }
     expect(
@@ -252,6 +313,30 @@ describe('server scoring', () => {
   })
 })
 describe('game session', () => {
+  it('keeps the seeded country private until submitting a guess', async () => {
+    const session = await game('start', { mode: 'practice' })
+    const { rows: [round] } = await db.query(
+      `insert into public.rounds(session_id,question_id,position,snapshot)
+       select $1,q.id,1,to_jsonb(q) || jsonb_build_object('subject',t.subject)
+       from public.questions q join public.topics t on t.id=q.topic_id
+       where t.slug='wild-giant-panda-range' and q.status='published' returning id`,
+      [session.id],
+    )
+    const shown = await game('spin', { id: session.id })
+    expect(shown.id).toBe(round.id)
+    expect(shown.display).toEqual({ mechanic: 'country' })
+    expect(shown).not.toHaveProperty('solution')
+    const answer = { country: 'RUS' }
+    const feedback = await game('submit', { id: session.id, round: round.id, answer })
+    expect(feedback).toMatchObject({
+      answer,
+      score: 0,
+      solution: { country: 'CHN', label: 'China' },
+    })
+    expect(feedback).not.toHaveProperty('difference')
+    expect((await game('session', { id: session.id })).rounds[0].feedback).toEqual(feedback)
+  })
+
   it('spins uniformly across all six eligible categories on first round', async () => {
     const counts = {}
     for (let i = 0; i < 120; i++) {
@@ -262,11 +347,12 @@ describe('game session', () => {
     expect(Object.keys(counts)).toHaveLength(6)
     for (const count of Object.values(counts)) expect(count).toBeGreaterThan(3)
   })
-  it('persists rounds, prevents concurrent double submissions and covers each seed without repeats', async () => {
+  it('persists rounds, prevents concurrent double submissions and avoids repeats', async () => {
+    const count = 36
     const s = await game('start', { mode: 'practice' })
-    const kinds = new Set(),
-      seen = new Set()
-    for (let i = 0; i < 21; i++) {
+    const seen = new Set()
+    let total = 0
+    for (let i = 0; i < count; i++) {
       const r = await game('spin', { id: s.id })
       expect(r).not.toHaveProperty('solution')
       expect(r.display).not.toHaveProperty('images')
@@ -280,15 +366,19 @@ describe('game session', () => {
         [r.id],
       )
       const key = privateRound.snapshot.solution
-      kinds.add(r.kind)
       seen.add(privateRound.question_id)
-      const answer =
-        r.kind === 'where'
-          ? { lat: key.lat, lng: key.lng }
-          : r.kind === 'when'
-            ? key.min
-            : key.correct
-      if (r.kind === 'what') {
+      const textClue = r.display.mechanic === 'text'
+      const revealable = r.kind === 'what' && !textClue
+      const answer = textClue
+        ? key.aliases[0]
+        : r.display.mechanic === 'country'
+          ? { country: key.country }
+          : r.kind === 'where'
+            ? { lat: key.lat, lng: key.lng }
+            : r.kind === 'when'
+              ? key.min
+              : key.correct
+      if (revealable) {
         expect(
           (await game('reveal', { id: s.id, round: r.id, stage: 1 })).reveals,
         ).toBe(1)
@@ -299,15 +389,15 @@ describe('game session', () => {
       const p = { id: s.id, round: r.id, answer }
       const [a, b] = await Promise.all([game('submit', p), game('submit', p)])
       expect(a).toEqual(b)
-      expect(a.score).toBe(r.kind === 'what' ? 800 : 1000)
+      expect(a.score).toBe(revealable ? 800 : 1000)
+      total += a.score
     }
-    expect(kinds.size).toBe(6)
-    expect(seen.size).toBe(21)
+    expect(seen.size).toBe(count)
     await game('finish', { id: s.id })
     await expect(game('session', { id: s.id }, other)).rejects.toThrow(
       'Session unavailable',
     )
-    expect((await game('session', { id: s.id })).total).toBe(20800)
+    expect((await game('session', { id: s.id })).total).toBe(total)
     expect(await work('leaderboard', {}, null)).toEqual([])
   })
   it('rejects late scores and returns the saved timeout feedback on retry', async () => {

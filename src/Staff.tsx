@@ -37,6 +37,7 @@ import { Button, buttonStyle } from './components/ui/button'
 import { Chart } from './Workspace'
 import { FocusDialog } from './Game'
 import type { Point } from './MapGuess'
+import { CountrySelect, countriesByCode } from './CountrySelect'
 const MapPicker = lazy(() => import('./MapGuess'))
 const adminTabs = [
   ['dashboard', 'Overview'],
@@ -380,9 +381,19 @@ function QuestionEditor({
 }) {
   const [kind, setKind] = useState<Kind>(record?.kind ?? 'when')
   const [mechanic, setMechanic] = useState(
-    record?.presentation.mechanic ?? 'evidence',
+    record?.kind === 'why'
+      ? (record.presentation.mechanic ?? 'evidence')
+      : 'evidence',
   )
   const [typed, setTyped] = useState(Boolean(record?.solution.aliases))
+  const [textOnly, setTextOnly] = useState(
+    record?.presentation.mechanic === 'text',
+  )
+  const textClue = textOnly && (kind === 'who' || kind === 'what')
+  const [whereMode, setWhereMode] = useState(
+    record?.presentation.mechanic === 'country' ? 'country' : 'pin',
+  )
+  const countryQuestion = kind === 'where' && whereMode === 'country'
   const [preview, setPreview] = useState<Round | null>(null),
     [answer, setAnswer] = useState<unknown>()
   const [previewFeedback, setPreviewFeedback] = useState<Feedback | null>(null)
@@ -443,6 +454,11 @@ function QuestionEditor({
         scale: num('scale'),
         precision: str('precision'),
       })
+    } else if (countryQuestion) {
+      const code = str('country')
+      display.mechanic = 'country'
+      solution.country = code
+      solution.label = countriesByCode.get(code)?.name
     } else if (kind === 'where') {
       Object.assign(solution, {
         lat: num('lat'),
@@ -450,6 +466,9 @@ function QuestionEditor({
         scale: num('scale'),
         ...(str('polygon') ? { polygon: JSON.parse(str('polygon')) } : {}),
       })
+    } else if (textClue) {
+      display.mechanic = 'text'
+      solution.aliases = lines('aliases')
     } else if (kind === 'who') {
       display.options = lines('options').map((image, i) => ({
         image,
@@ -691,7 +710,7 @@ function QuestionEditor({
         </div>
         {area('prompt', 'Question prompt', record?.prompt, true)}
         <div className="stack" key={kind}>
-          {field(
+          {!countryQuestion && field(
             'label',
             'Correct answer label',
             existing?.solution.label,
@@ -699,6 +718,21 @@ function QuestionEditor({
             true,
           )}
           {kind === 'where' && (
+            <label>
+              Map answer type
+              <select value={whereMode} onChange={(e) => setWhereMode(e.target.value)}>
+                <option value="pin">Map pin</option>
+                <option value="country">Select a country</option>
+              </select>
+            </label>
+          )}
+          {countryQuestion && (
+            <label>
+              Correct country
+              <CountrySelect name="country" defaultValue={String(existing?.solution.country ?? '')} required />
+            </label>
+          )}
+          {kind === 'where' && !countryQuestion && (
             <>
               <div className="form-grid">
                 <label>
@@ -844,7 +878,24 @@ function QuestionEditor({
               </select>
             </label>
           )}
-          {kind === 'what' && (
+          {(kind === 'who' || kind === 'what') && (
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={textOnly}
+                onChange={(e) => setTextOnly(e.target.checked)}
+              />
+              Text clue
+            </label>
+          )}
+          {textClue &&
+            area(
+              'aliases',
+              'Accepted answers (one per line)',
+              (existing?.solution.aliases as string[] | undefined)?.join('\n'),
+              true,
+            )}
+          {kind === 'what' && !textClue && (
             <>
               <label className="check-row">
                 <input
@@ -905,6 +956,7 @@ function QuestionEditor({
               )}
             </div>
           ) : (
+            !textClue &&
             (kind === 'who' ||
               kind === 'how' ||
               kind === 'why' ||
@@ -935,7 +987,7 @@ function QuestionEditor({
               </div>
             )
           )}
-          {(kind === 'who' || kind === 'what') && (
+          {!textClue && (kind === 'who' || kind === 'what') && (
             <>
               {area(
                 'credits',

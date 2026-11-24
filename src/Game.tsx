@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -27,6 +27,7 @@ import {
   ErrorBox,
   Loading,
   PageTitle,
+  spinToCategory,
   Wheel,
 } from './components/shared'
 import {
@@ -93,7 +94,8 @@ function RoundView({
           className="category-badge"
           style={{ '--accent': cat.color } as CSSProperties}
         >
-          <cat.icon size={16} /> {cat.label} · {cat.name}
+          <cat.icon size={16} /> {cat.label} ·{' '}
+          {round.display.mechanic === 'text' ? 'Text clue' : cat.name}
         </span>
         {remaining !== null && !feedback && (
           <span className={'timer ' + (expired ? 'expired' : '')}>
@@ -174,7 +176,7 @@ function RoundView({
       ) : (
         <div className="question-foot">
           <span className="muted">
-            {round.kind === 'what'
+            {round.kind === 'what' && round.display.mechanic !== 'text'
               ? 'Reveals reduce the maximum score.'
               : 'Up to ' + number(round.display.maxScore ?? 1000) + ' points'}
           </span>
@@ -199,13 +201,19 @@ function RoundView({
   )
 }
 export default function Game({ results = false }: { results?: boolean }) {
-  const { id = '' } = useParams(),
-    navigate = useNavigate(),
+  const { id = '' } = useParams()
+  return <GameSession key={id} id={id} results={results} />
+}
+
+function GameSession({ id, results }: { id: string; results: boolean }) {
+  const navigate = useNavigate(),
     client = useQueryClient(),
     reduced = useReducedMotion(),
     { hash } = useLocation()
   const [rotation, setRotation] = useState(0),
-    [spinning, setSpinning] = useState(false),
+    [phase, setPhase] = useState<'ready' | 'selecting' | 'spinning' | 'landed'>(
+      'ready',
+    ),
     [fresh, setFresh] = useState<Round | null>(null),
     [advance, setAdvance] = useState(false),
     [endDialog, setEndDialog] = useState(false)
@@ -217,34 +225,27 @@ export default function Game({ results = false }: { results?: boolean }) {
     void session.refetch()
     void client.invalidateQueries({ queryKey: ['work'] })
   }
+  const onSpinComplete = useCallback(() => setPhase('landed'), [])
   useEffect(() => {
-    setFresh(null)
-    setAdvance(false)
-    setSpinning(false)
-    setRotation(0)
-  }, [id])
-  useEffect(() => {
-    if (!spinning || !fresh) return
+    if (phase !== 'landed') return
     const t = setTimeout(
       () => {
-        setSpinning(false)
         setAdvance(false)
-        void session.refetch()
+        setPhase('ready')
       },
-      reduced ? 40 : 3240,
+      reduced ? 160 : 500,
     )
     return () => clearTimeout(t)
-  }, [fresh, spinning, reduced, session.refetch])
+  }, [phase, reduced])
   const spin = useMutation({
     mutationFn: () => play<Round>('spin', { id }),
-    onMutate: () => setSpinning(true),
+    onMutate: () => setPhase('selecting'),
     onSuccess: (r) => {
-      const i = categories.findIndex((c) => c.kind === r.kind),
-        offset = (360 - i * 60) % 360
-      setRotation((a) => a + ((360 - (a % 360) + offset) % 360) + 1440)
       setFresh(r)
+      setRotation((angle) => spinToCategory(angle, r.kind))
+      setPhase('spinning')
     },
-    onError: () => setSpinning(false),
+    onError: () => setPhase('ready'),
   })
   const finish = useMutation({
     mutationFn: () => play<Session>('finish', { id }),
@@ -254,8 +255,12 @@ export default function Game({ results = false }: { results?: boolean }) {
       navigate('/results/' + id)
     },
   })
-  if (session.isPending) return <Loading />
-  if (session.error) return <ErrorBox error={message(session.error)} />
+  if (!session.data)
+    return session.error ? (
+      <ErrorBox error={message(session.error)} />
+    ) : (
+      <Loading />
+    )
   const s = session.data,
     last = s.rounds.at(-1)
   if (results)
@@ -322,6 +327,8 @@ export default function Game({ results = false }: { results?: boolean }) {
         </div>
       </>
     )
+  const spinning = phase !== 'ready'
+  const selected = phase === 'landed' ? fresh?.kind : undefined
   const shown = spinning || advance ? null : (fresh ?? last)
   const latest = shown && last?.id === shown.id ? { ...shown, ...last } : shown
   const answered = s.rounds.filter((r) => r.feedback).length
@@ -373,15 +380,22 @@ export default function Game({ results = false }: { results?: boolean }) {
         />
       ) : (
         <div className="game-stage panel">
-          <Wheel rotation={rotation} eligible={s.eligible} />
+          <Wheel
+            rotation={rotation}
+            eligible={s.eligible}
+            selected={selected}
+            onSpinComplete={onSpinComplete}
+          />
           <div>
-            <h2>
-              {spinning
-                ? fresh
-                  ? categories.find((c) => c.kind === fresh.kind)?.label +
-                    ' selected'
-                  : 'Selecting a category…'
-                : 'Ready to spin?'}
+            <h2 role="status">
+              {selected
+                ? categories.find((category) => category.kind === selected)
+                    ?.label + ' selected'
+                : phase === 'spinning'
+                  ? 'Spinning…'
+                  : phase === 'selecting'
+                    ? 'Selecting a category…'
+                    : 'Ready to spin?'}
             </h2>
             <p>
               {s.mode === 'assessment'
@@ -398,7 +412,11 @@ export default function Game({ results = false }: { results?: boolean }) {
               onClick={() => spin.mutate()}
             >
               <Orbit size={19} />
-              {s.mode === 'assessment' ? 'Open question' : 'Spin the wheel'}
+              {spinning
+                ? 'Spin in progress'
+                : s.mode === 'assessment'
+                  ? 'Open question'
+                  : 'Spin the wheel'}
             </Button>
             {spin.error && <ErrorBox error={message(spin.error)} />}
           </div>

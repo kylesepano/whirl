@@ -8,7 +8,7 @@ export type Display = {
   options?: Option[]
   image?: string
   images?: string[]
-  mechanic?: 'matching' | 'evidence' | 'chain'
+  mechanic?: 'matching' | 'evidence' | 'chain' | 'text' | 'country'
   pairs?: Option[]
   matches?: Option[]
   min?: number
@@ -32,6 +32,7 @@ export type Solution = {
   credits?: Credit[]
   lat?: number
   lng?: number
+  country?: string
   min?: number
   max?: number
   precision?: string

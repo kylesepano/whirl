@@ -22,9 +22,10 @@ async function dataset(name, localFile) {
   return response.json()
 }
 
-const [countries, places] = await Promise.all([
+const [countries, places, countryBoundaries] = await Promise.all([
   dataset('ne_110m_admin_0_countries', sourceFiles[0]),
   dataset('ne_110m_populated_places_simple', sourceFiles[1]),
+  dataset('ne_50m_admin_0_countries', sourceFiles[2]),
 ])
 const land = countries.features.map(({ geometry }) => ({
   type: 'Feature',
@@ -54,8 +55,28 @@ const labels = [...countryLabels, ...cityLabels].map((feature, id) => ({
   ...feature,
   properties: { ...feature.properties, icon: 'atlas-label-' + id },
 }))
+const boundaries = countryBoundaries.features.map(({ geometry, properties }) => ({
+  type: 'Feature',
+  geometry: { ...geometry, coordinates: rounded(geometry.coordinates) },
+  properties: { code: properties.ADM0_A3 },
+}))
+const countryOptions = countryBoundaries.features
+  .map(({ properties: p }) => ({
+    code: p.ADM0_A3,
+    name: p.ADM0_A3 === 'CHN' ? 'China' : p.NAME_EN || p.NAME,
+    center: rounded([p.LABEL_X, p.LABEL_Y]),
+  }))
+  .sort((a, b) => a.name.localeCompare(b.name, 'en'))
 await mkdir(output, { recursive: true })
 await Promise.all([
+  writeFile(
+    new URL('country-boundaries.geojson', output),
+    JSON.stringify(collection(boundaries)) + '\n',
+  ),
+  writeFile(
+    new URL('../src/countries.json', import.meta.url),
+    JSON.stringify(countryOptions) + '\n',
+  ),
   writeFile(
     new URL('countries.geojson', output),
     JSON.stringify(collection(land)) + '\n',

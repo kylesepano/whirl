@@ -16,7 +16,7 @@ npm.cmd run dev
 
 Visit **http://127.0.0.1:5173/** and select **Play Roulette**. Guests can play without an account form. Results and progress are tied to the session in the same browser.
 
-The development server binds to loopback and stores its PostgreSQL database under the ignored `.whirl/` directory. WHERE rounds use MapLibre and bundled Natural Earth country and city data. The map needs no tile service or API key. Coordinate entry remains available if WebGL is unavailable.
+The development server binds to loopback and stores its PostgreSQL database under the ignored `.whirl/` directory. WHERE rounds use MapLibre and bundled Natural Earth data. Country questions highlight the full country and provide a country list. Location questions accept a map pin or coordinates. The maps need no tile service or API key.
 
 See [DEMO.md](DEMO.md) for a guided walkthrough.
 
@@ -55,5 +55,7 @@ Keep the local admin password and database connection strings server-side. The l
 - [Question sourcing, asset rights, and importer](docs/content.md)
 - [Implementation status and remaining work](PROGRESS.md)
 
-The bundled starter bank contains **16 verified topic bundles and 21 published variants**. The 1,000-topic goal requires sourcing, review, and publication of 984 additional verified bundles. The importer stores dated Wikidata claims as review candidates.
+The bundled bank contains **1,357 published questions**, with more than 1,000 across General knowledge, History, Science, Movie & TV series, Literature, Sports, Geography, Music, and Pop culture. It also includes Animals, Space & Astronomy, Food & Drink, Art & Design, and Games & Hobbies. Open **Question bank** to search or filter by subject and roulette category.
+
+New bundled questions load on local server startup or when the latest migrations are applied to hosted Supabase. The separate Wikidata importer stores dated claims as review candidates.
 

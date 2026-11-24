@@ -10,8 +10,14 @@ import {
   Sparkles,
   Orbit,
 } from 'lucide-react'
-import { motion, useReducedMotion } from 'motion/react'
-import type { CSSProperties, ReactNode } from 'react'
+import {
+  animate,
+  motion,
+  useMotionValue,
+  useReducedMotion,
+  useTransform,
+} from 'motion/react'
+import { useEffect, type CSSProperties, type ReactNode } from 'react'
 import type { Kind } from '../api'
 export const categories = [
   {
@@ -42,7 +48,7 @@ export const categories = [
     kind: 'what',
     label: 'WHAT',
     name: 'Mysteries',
-    detail: 'Uncover the image',
+    detail: 'Solve a clue',
     color: '#f697d8',
     icon: ScanLine,
   },
@@ -63,14 +69,39 @@ export const categories = [
     icon: ListOrdered,
   },
 ] as const
+const sliceDegrees = 360 / categories.length
+
+export function spinToCategory(rotation: number, kind: Kind) {
+  const target =
+    -categories.findIndex((category) => category.kind === kind) * sliceDegrees
+  const remaining = (((target - rotation) % 360) + 360) % 360
+  return rotation + 1440 + remaining
+}
+
 export function Wheel({
   rotation = 0,
   eligible,
+  selected,
+  onSpinComplete,
 }: {
   rotation?: number
   eligible?: Kind[]
+  selected?: Kind
+  onSpinComplete?: () => void
 }) {
   const reduced = useReducedMotion()
+  const angle = useMotionValue(rotation)
+  const upright = useTransform(angle, (value) => -value)
+  useEffect(() => {
+    if (angle.get() === rotation) return
+    const animation = animate(angle, rotation, {
+      duration: reduced ? 0 : 2.8,
+      ease: [0.12, 0.66, 0.12, 1],
+      onComplete: onSpinComplete,
+    })
+    return () => animation.stop()
+  }, [angle, rotation, reduced, onSpinComplete])
+
   return (
     <div className="wheel-scene" aria-hidden="true">
       <div className="orbital orbit-a" />
@@ -82,34 +113,45 @@ export function Wheel({
       <i className="star star-d" />
       <div className="wheel-frame">
         <div className="wheel-pointer" />
-        <motion.div
-          className="wheel-face"
-          animate={{ rotate: rotation }}
-          transition={{
-            duration: reduced ? 0 : 3.2,
-            ease: [0.12, 0.66, 0.12, 1],
-          }}
-        >
-          {categories.map(({ kind, label, color, icon: Icon }, i) => (
+        <motion.div className="wheel-face" style={{ rotate: angle }}>
+          {categories.map(({ kind, color }, i) => (
             <div
               key={kind}
+              data-category={kind}
               className={
                 'slice ' +
-                (eligible && !eligible.includes(kind) ? 'slice-off' : '')
+                (eligible && !eligible.includes(kind) ? 'slice-off ' : '') +
+                (kind === selected ? 'slice-selected' : '')
               }
               style={
                 {
-                  '--angle': i * 60 + 'deg',
+                  '--angle': i * sliceDegrees + 'deg',
                   '--accent': color,
                 } as CSSProperties
               }
-            >
-              <div>
-                <Icon strokeWidth={1.8} />
-                <span>{label}</span>
-              </div>
-            </div>
+            />
           ))}
+          {categories.map(({ kind, label, color, icon: Icon }, i) => {
+            const radians = (i * sliceDegrees * Math.PI) / 180
+            return (
+              <div
+                className="wheel-label"
+                key={kind}
+                data-category={kind}
+                style={{
+                  left: 50 + 34 * Math.sin(radians) + '%',
+                  top: 50 - 34 * Math.cos(radians) + '%',
+                  color,
+                  opacity: eligible && !eligible.includes(kind) ? 0.45 : 1,
+                }}
+              >
+                <motion.div style={{ rotate: upright }}>
+                  <Icon strokeWidth={1.8} />
+                  <span>{label}</span>
+                </motion.div>
+              </div>
+            )
+          })}
         </motion.div>
         <div className="wheel-hub">
           <Orbit size={29} />

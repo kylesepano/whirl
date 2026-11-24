@@ -1,13 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import * as maplibre from 'maplibre-gl'
 import type { GeoJSONSource, Map as MapInstance, Marker } from 'maplibre-gl'
-import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
-import 'maplibre-gl/dist/maplibre-gl.css'
 import type { Solution } from './api'
 import { Button } from './components/ui/button'
-import { addWorldLabels, worldStyle } from './WorldMapStyle'
+import { createWorldMap } from './WorldMap'
+import { addWorldLabels } from './WorldMapStyle'
 export type Point = { lat: number; lng: number }
-maplibre.setWorkerUrl(workerUrl)
 export default function MapGuess({
   value,
   onChange,
@@ -34,21 +32,8 @@ export default function MapGuess({
     if (!ref.current) return
     const controller = new AbortController()
     try {
-      const m = new maplibre.Map({
-        container: ref.current,
-        center: [0, 21],
-        zoom: 1.2,
-        dragRotate: false,
-        attributionControl: false,
-        maxZoom: 9,
-        style: worldStyle,
-      })
+      const m = createWorldMap(ref.current)
       map.current = m
-      m.addControl(
-        new maplibre.NavigationControl({ showCompass: false }),
-        'top-right',
-      )
-      m.addControl(new maplibre.AttributionControl({ compact: false }))
       m.on('error', () =>
         setError(
           'Part of the map could not load. You can still enter coordinates below.',

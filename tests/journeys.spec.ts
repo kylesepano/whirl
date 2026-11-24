@@ -18,11 +18,21 @@ async function spin(page: Page) {
 }
 
 async function answer(page: Page, kind: string) {
-  if (kind === 'WHO' || kind === 'WHAT')
-    await page.locator('.options .option').first().click()
+  if (kind === 'WHO' || kind === 'WHAT') {
+    const choice = page.locator('.options .option').first()
+    if (await choice.count()) await choice.click()
+    else
+      await page
+        .getByLabel('Your answer', { exact: true })
+        .fill('Example guess')
+  }
   if (kind === 'WHERE') {
-    await page.getByLabel('Latitude', { exact: true }).fill('20')
-    await page.getByLabel('Longitude', { exact: true }).fill('40')
+    if (await page.getByText('Select a country on the map or from the list below.').count()) {
+      await page.getByLabel('Country guess').selectOption('RUS')
+    } else {
+      await page.getByLabel('Latitude', { exact: true }).fill('20')
+      await page.getByLabel('Longitude', { exact: true }).fill('40')
+    }
   }
   if (kind === 'WHY') {
     const matches = page.locator('.match-grid select')
@@ -37,6 +47,54 @@ async function answer(page: Page, kind: string) {
   await submitAnswer(page).click()
   await expect(page.locator('.feedback')).toBeVisible()
 }
+
+test('the animated wheel stops at the server category before opening the question', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await start(page, 'Quick Play')
+  const response = page.waitForResponse(
+    (r) => r.url().endsWith('/api/play/spin') && r.ok(),
+  )
+  await page.getByRole('button', { name: 'Spin the wheel' }).click()
+  const { kind } = await (await response).json()
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Spinning…' }),
+  ).toBeVisible()
+  const landing = await page.waitForFunction((picked) => {
+    const label = document.querySelector(
+      '.wheel-label[data-category="' + picked + '"]',
+    )
+    const slice = document.querySelector(
+      '.slice-selected[data-category="' + picked + '"]',
+    )
+    const pointer = document.querySelector('.wheel-pointer')
+    const hub = document.querySelector('.wheel-hub')
+    if (!label || !slice || !pointer || !hub) return
+    const box = label.getBoundingClientRect()
+    const marker = pointer.getBoundingClientRect()
+    return {
+      difference: Math.abs(
+        box.left + box.width / 2 - marker.left - marker.width / 2,
+      ),
+      aboveHub: box.bottom < hub.getBoundingClientRect().top,
+      upright:
+        label.querySelector('svg')!.getBoundingClientRect().top <
+        label.querySelector('span')!.getBoundingClientRect().top,
+      status: document.querySelector('.game-stage [role="status"]')
+        ?.textContent,
+    }
+  }, kind)
+  expect(await landing.jsonValue()).toMatchObject({
+    aboveHub: true,
+    upright: true,
+    status: kind.toUpperCase() + ' selected',
+  })
+  expect((await landing.jsonValue()).difference).toBeLessThan(2)
+  await expect(page.locator('.category-badge')).toContainText(
+    kind.toUpperCase(),
+  )
+})
 
 test('guest completes Quick Play and sees results and progress after a reload', async ({
   page,
@@ -80,13 +138,14 @@ test('admin signs in, adds, edits, publishes and deletes a question', async ({
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
   await expect(page).toHaveURL(/\/admin\/questions/)
   const title = 'Test review ' + Date.now()
-  const prompt = 'When did the event documented in ' + title + ' occur?'
-  const updated = prompt.replace('occur', 'take place')
+  const prompt = 'Which country is the setting of ' + title + '?'
+  const updated = prompt.replace('the setting of', 'featured in')
   await page.getByLabel('Topic title').fill(title)
   await page.getByLabel('Subject', { exact: true }).fill('History')
   await page.getByLabel('Question prompt').fill(prompt)
-  await page.getByLabel('Correct answer label').fill('1900 CE')
-  await page.getByLabel('Earliest accepted astronomical year').fill('1900')
+  await page.getByLabel('Question type').selectOption('where')
+  await page.getByLabel('Map answer type').selectOption('country')
+  await page.getByLabel('Correct country').selectOption('CHN')
   await page
     .getByLabel('Explanation', { exact: true })
     .fill('A test-only exercise for the moderation workflow.')
@@ -96,6 +155,8 @@ test('admin signs in, adds, edits, publishes and deletes a question', async ({
   await expect(
     page.getByRole('heading', { name: 'Edit variant' }),
   ).toBeVisible()
+  await expect(page.getByLabel('Map answer type')).toHaveValue('country')
+  await expect(page.getByLabel('Correct country')).toHaveValue('CHN')
   await page.getByLabel('Question prompt').fill(updated)
   await page.getByRole('button', { name: 'Save for review' }).click()
   await expect(
@@ -143,12 +204,15 @@ test('mobile navigation and landing have no horizontal overflow', async ({
   ).toBeLessThanOrEqual(390)
   await page.getByRole('button', { name: 'Open navigation' }).click()
   await page
+    .getByRole('complementary', { name: 'Main navigation' })
     .getByRole('link', { name: 'Question bank', exact: true })
-    .first()
     .click()
   await expect(
     page.getByRole('heading', { name: 'Question bank' }),
   ).toBeVisible()
+  const subject = page.getByRole('combobox', { name: 'Question subject' })
+  await subject.selectOption('Sports')
+  await expect(page.getByRole('cell', { name: 'Sports', exact: true })).toHaveCount(24)
 })
 
 test('WHERE loads the bundled world map and accepts a pin and coordinates', async ({
@@ -165,30 +229,121 @@ test('WHERE loads the bundled world map and accepts a pin and coordinates', asyn
       ? route.continue()
       : route.abort(),
   )
-  await start(page, 'Marathon')
-  for (let round = 0; round < 20; round++) {
-    const kind = await spin(page)
-    if (kind === 'WHERE') {
-      expect((await (await atlas).json()).features.length).toBeGreaterThan(150)
-      expect((await (await labels).json()).features.length).toBeGreaterThan(300)
-      const canvas = page.locator('.map canvas')
-      await expect(canvas).toBeVisible()
-      await canvas.click({ position: { x: 170, y: 160 } })
-      await expect(page.getByLabel('Your guess')).toBeVisible()
-      await expect(
-        page.getByText('Part of the map could not load.', { exact: false }),
-      ).toHaveCount(0)
-      await answer(page, kind)
-      await expect(page.locator('.feedback')).toContainText(
-        'km from the target',
-      )
-      await expect(page.getByLabel('Correct location')).toBeVisible()
-      await expect(page.getByRole('link', { name: 'Natural Earth' })).toBeVisible()
-      await expect(page.getByText('Map labels could not load.')).toHaveCount(0)
-      return
-    }
-    await answer(page, kind)
-    await page.getByRole('button', { name: 'Next round' }).click()
-  }
-  throw new Error('WHERE was absent from the Marathon pool.')
+  // The larger WHERE pool includes both country guesses and location pins.
+  // Use a fixed point question to keep this map interaction test deterministic.
+  await page.route('**/api/play/spin', (route) => route.fulfill({
+    json: {
+      id: '3182da6f-cd9d-43de-a983-6ae1b069e6ae',
+      kind: 'where',
+      position: 1,
+      topic: 'History',
+      prompt: 'Pin the pyramid complex that includes the Great Pyramid of Khufu.',
+      difficulty: 'standard',
+      deadline: null,
+      reveals: 0,
+      display: {},
+    },
+  }))
+  await page.route('**/api/play/submit', (route) => {
+    const { answer } = route.request().postDataJSON()
+    expect(answer).toEqual({ lat: 20, lng: 40 })
+    return route.fulfill({
+      json: {
+        answer,
+        score: 0,
+        difference: 1450,
+        solution: { label: 'Giza pyramid complex', lat: 29.9792, lng: 31.1342 },
+        explanation: 'The Great Pyramid of Khufu is at Giza.',
+        sourceUrl: 'https://whc.unesco.org/en/list/86/',
+        sourceTitle: 'UNESCO World Heritage Centre',
+      },
+    })
+  })
+  await start(page, 'Practice')
+  expect(await spin(page)).toBe('WHERE')
+  expect((await (await atlas).json()).features.length).toBeGreaterThan(150)
+  expect((await (await labels).json()).features.length).toBeGreaterThan(300)
+  const canvas = page.locator('.map canvas')
+  await expect(canvas).toBeVisible()
+  await canvas.click({ position: { x: 170, y: 160 } })
+  await expect(page.getByLabel('Your guess')).toBeVisible()
+  await expect(
+    page.getByText('Part of the map could not load.', { exact: false }),
+  ).toHaveCount(0)
+  await answer(page, 'WHERE')
+  await expect(page.locator('.feedback')).toContainText('km from the target')
+  await expect(page.getByLabel('Correct location')).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Natural Earth', exact: true })).toBeVisible()
+  await expect(page.getByText('Map labels could not load.')).toHaveCount(0)
+})
+
+test('WHERE country mode highlights distant parts of the picked country and reveals the correct country', async ({
+  page,
+}) => {
+  const roundId = '3c38f1d0-a451-42c2-a792-8ec0147f05f3'
+  await page.route('**/api/play/spin', (route) => route.fulfill({
+    json: {
+      id: roundId,
+      kind: 'where',
+      position: 1,
+      topic: 'Animals',
+      prompt: 'Which country is home to wild giant pandas?',
+      difficulty: 'standard',
+      deadline: null,
+      reveals: 0,
+      display: { mechanic: 'country' },
+    },
+  }))
+  await page.route('**/api/play/submit', (route) => {
+    const { answer } = route.request().postDataJSON()
+    expect(answer).toEqual({ country: 'RUS' })
+    return route.fulfill({
+      json: {
+        answer,
+        score: 0,
+        solution: { label: 'China', country: 'CHN' },
+        explanation: 'Wild giant pandas live in central China.',
+        sourceUrl: 'https://nationalzoo.si.edu/animals/giant-panda',
+        sourceTitle: 'Smithsonian National Zoo: Giant panda',
+      },
+    })
+  })
+  await start(page, 'Practice')
+  await spin(page)
+  await expect(submitAnswer(page)).toBeDisabled()
+  const canvas = page.getByLabel('Interactive country map').locator('canvas')
+  await expect(canvas).toBeVisible()
+  const box = (await canvas.boundingBox())!
+  // Match the initial Mercator camera at [0, 21] and zoom 0.6.
+  const worldSize = 512 * 2 ** 0.6
+  const mercator = (lat: number) => Math.asinh(Math.tan(lat * Math.PI / 180)) / (2 * Math.PI)
+  const project = (lng: number, lat: number) => ({
+    x: Math.round(box.width / 2 + worldSize * lng / 360),
+    y: Math.round(box.height / 2 - worldSize * (mercator(lat) - mercator(21))),
+  })
+  const westernRussia = project(55, 57)
+  const easternRussia = project(130, 64)
+  await expect(async () => {
+    await canvas.click({ position: westernRussia })
+    await expect(page.getByLabel('Country guess')).toHaveValue('RUS', { timeout: 500 })
+  }).toPass({ timeout: 10000 })
+  await expect(async () => {
+    const data = (await canvas.screenshot({ scale: 'css' })).toString('base64')
+    const colors = await page.evaluate(async ({ data, points }) => {
+      const rendered = new Image()
+      rendered.src = 'data:image/png;base64,' + data
+      await rendered.decode()
+      const canvas = document.createElement('canvas')
+      canvas.width = rendered.width
+      canvas.height = rendered.height
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(rendered, 0, 0)
+      return points.map(({ x, y }) => Array.from(ctx.getImageData(x, y, 1, 1).data).slice(0, 3))
+    }, { data, points: [westernRussia, easternRussia] })
+    expect(colors).toEqual([[153, 118, 223], [153, 118, 223]])
+  }).toPass({ timeout: 5000 })
+  await submitAnswer(page).click()
+  await expect(page.getByText('Your guess · Russia')).toBeVisible()
+  await expect(page.getByText('Correct country · China')).toBeVisible()
+  await expect(page.getByLabel('Country guess')).toHaveCount(0)
 })

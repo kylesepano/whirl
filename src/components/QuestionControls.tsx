@@ -17,10 +17,13 @@ import {
 } from '../api'
 import { formatHistoricalDate, parseHistoricalDate } from '../dates'
 import type { Point } from '../MapGuess'
+import type { CountryGuess } from '../CountryMapGuess'
+import { countriesByCode } from '../CountrySelect'
 import { Button } from './ui/button'
 import { Loading } from './shared'
 
 const MapGuess = lazy(() => import('../MapGuess'))
+const CountryMapGuess = lazy(() => import('../CountryMapGuess'))
 function optionText(options: Option[] | undefined, id: string) {
   return options?.find((o) => o.id === id)?.label ?? id
 }
@@ -33,6 +36,9 @@ export const initialAnswer = (round: Round): unknown =>
 export function validAnswer(round: Round, answer: unknown) {
   if (answer == null) return false
   if (round.kind === 'where') {
+    if (round.display.mechanic === 'country') {
+      return countriesByCode.has((answer as CountryGuess).country)
+    }
     const { lat, lng } = answer as Point
     return (
       Number.isFinite(lat) &&
@@ -312,6 +318,35 @@ export function QuestionControls({
   const { display, kind } = round
   const locked = Boolean(feedback)
   const options = display.options ?? []
+  if (display.mechanic === 'text')
+    return (
+      <label>
+        Your answer
+        <input
+          value={typeof answer === 'string' ? answer : ''}
+          onChange={(e) => onChange(e.target.value)}
+          maxLength={200}
+          disabled={locked}
+        />
+      </label>
+    )
+  if (kind === 'where' && display.mechanic === 'country')
+    return (
+      <>
+        {!locked && (
+          <p className="control-hint">
+            <MapPin size={15} /> Select a country on the map or from the list below.
+          </p>
+        )}
+        <Suspense fallback={<Loading />}>
+          <CountryMapGuess
+            value={answer as CountryGuess | null}
+            onChange={onChange}
+            correct={feedback?.solution.country}
+          />
+        </Suspense>
+      </>
+    )
   if (kind === 'where')
     return (
       <>

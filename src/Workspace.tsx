@@ -37,10 +37,13 @@ export default function Workspace() {
 function Bank() {
   const [text, setText] = useState(''),
     [kind, setKind] = useState(''),
+    [subject, setSubject] = useState(''),
     [page, setPage] = useState(0)
+  const subjects = useWork<string[]>('bank_subjects')
   const q = useWork<Question[]>('browse', {
     search: text,
     kind,
+    subject,
     offset: page * 24,
   })
   return (
@@ -60,6 +63,19 @@ function Bank() {
             setPage(0)
           }}
         />
+        <select
+          aria-label="Question subject"
+          value={subject}
+          onChange={(e) => {
+            setSubject(e.target.value)
+            setPage(0)
+          }}
+        >
+          <option value="">All subjects</option>
+          {subjects.data?.map((item) => (
+            <option key={item}>{item}</option>
+          ))}
+        </select>
         <select
           aria-label="Question category"
           value={kind}
@@ -88,6 +104,7 @@ function Bank() {
                 <th>Question</th>
                 <th>Category</th>
                 <th>Topic</th>
+                <th>Subject</th>
               </tr>
             </thead>
             <tbody>
@@ -98,6 +115,7 @@ function Bank() {
                     <span className="badge">{r.kind.toUpperCase()}</span>
                   </td>
                   <td>{r.title}</td>
+                  <td>{r.subject}</td>
                 </tr>
               ))}
             </tbody>
